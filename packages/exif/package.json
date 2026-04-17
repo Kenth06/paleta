@@ -1,0 +1,28 @@
+{
+  "name": "@paleta/exif",
+  "version": "0.1.0-alpha.0",
+  "description": "Extract EXIF APP1 thumbnails from JPEGs for fast-path palette extraction.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["exif", "jpeg", "thumbnail", "paleta"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kenth06/paleta.git",
+    "directory": "packages/exif"
+  }
+}

@@ -62,7 +62,9 @@ export async function normalizeInput(
 
   if (source instanceof URL || typeof source === "string") {
     const url = typeof source === "string" ? source : source.toString();
-    const response = await fetch(url, { signal: init?.signal, redirect: "follow" });
+    const requestInit: RequestInit = { redirect: "follow" };
+    if (init?.signal) requestInit.signal = init.signal;
+    const response = await fetch(url, requestInit);
     const bytes = await responseToBytes(response);
     return { bytes, response, sourceUrl: url };
   }

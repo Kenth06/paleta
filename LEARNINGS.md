@@ -40,12 +40,20 @@ Persistent notebook across Claude sessions. Append-only. Read before starting wo
 
 *(Record here when you get something wrong. Include date, what, why, and how to avoid.)*
 
-<!-- TEMPLATE:
-### YYYY-MM-DD — <short title>
-**What**: <what you did wrong>
-**Why**: <the incorrect mental model>
-**Avoid next time**: <concrete rule>
--->
+### 2026-04-17 — exactOptionalPropertyTypes vs `signal: undefined`
+**What**: Passed `{ signal: opts?.signal, redirect: "follow" }` to `fetch()` with
+`exactOptionalPropertyTypes: true`. TS rejected it because `RequestInit.signal`
+is typed `AbortSignal | null` (not `| undefined`), and our value could be undefined.
+**Why**: Assumed optional-property typing is symmetric with the browser's lib
+definitions, but the DOM lib uses `null` for "absent", not `undefined`.
+**Avoid next time**: With `exactOptionalPropertyTypes`, don't spread optional
+values into option objects. Build the object conditionally:
+```ts
+const init: RequestInit = { redirect: "follow" };
+if (opts.signal) init.signal = opts.signal;
+```
+This also applies to any DOM/Cloudflare typing that uses `X | null` rather
+than `X | undefined`.
 
 ## Wins
 

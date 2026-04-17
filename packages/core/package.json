@@ -1,0 +1,40 @@
+{
+  "name": "@paleta/core",
+  "version": "0.1.0-alpha.0",
+  "description": "Pure-TS kernel for paleta: sniff, quantize (Wu), OKLab, cache pipeline.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./sniff": {
+      "types": "./dist/sniff.d.ts",
+      "import": "./dist/sniff.js"
+    },
+    "./quantize": {
+      "types": "./dist/quantize/index.d.ts",
+      "import": "./dist/quantize/index.js"
+    },
+    "./oklab": {
+      "types": "./dist/oklab.d.ts",
+      "import": "./dist/oklab.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["color", "palette", "colorthief", "oklab", "cloudflare", "workers", "edge", "wasm"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kenth06/paleta.git",
+    "directory": "packages/core"
+  }
+}

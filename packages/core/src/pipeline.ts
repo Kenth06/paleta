@@ -17,7 +17,13 @@
 
 import { hashKey, readCachedPalette, writeCachedPalette } from "./cache.js";
 import { normalizeInput, type NormalizedInput } from "./input.js";
-import { buildHistogram, quantizeWu } from "./quantize/index.js";
+import {
+  buildHistogram,
+  isWasmReady,
+  quantizeWu,
+  quantizeWuWasm,
+  WasmNotInitializedError,
+} from "./quantize/index.js";
 import { resizeNearestRGBA } from "./resize.js";
 import { sniffFormat, sniffFormatFromResponse } from "./sniff.js";
 import { sortPaletteByDominance } from "./sort.js";
@@ -149,15 +155,52 @@ export async function getPalette(
   const step = chooseStride(totalPixels, opts.maxSamples ?? DEFAULTS.maxSamples);
 
   const tQuant = now();
-  const hist = buildHistogram(resized.data, resized.width, resized.height, {
-    alphaThreshold: opts.alphaThreshold ?? DEFAULTS.alphaThreshold,
-    includeWhite: opts.includeWhite ?? DEFAULTS.includeWhite,
-    step,
-  });
-  const { palette: rawPalette, populations } = quantizeWu(
-    hist,
-    opts.colorCount ?? DEFAULTS.colorCount,
-  );
+  const alphaThreshold = opts.alphaThreshold ?? DEFAULTS.alphaThreshold;
+  const includeWhite = opts.includeWhite ?? DEFAULTS.includeWhite;
+  const colorCount = opts.colorCount ?? DEFAULTS.colorCount;
+
+  const wantWasm = opts.useWasm ?? isWasmReady();
+  let rawPalette: typeof sorted extends never ? never : ReturnType<typeof quantizeWu>["palette"];
+  let populations: number[];
+  let sampledTotal: number;
+
+  if (wantWasm) {
+    try {
+      const res = quantizeWuWasm(resized.data, resized.width, resized.height, {
+        colorCount,
+        step,
+        alphaThreshold,
+        includeWhite,
+      });
+      rawPalette = res.palette;
+      populations = res.populations;
+      // WASM total isn't directly returned; approximate via resized pixel count
+      // divided by stride. Exact count only matters for the meta field.
+      sampledTotal = Math.floor((resized.width * resized.height) / step);
+    } catch (err) {
+      if (!(err instanceof WasmNotInitializedError)) throw err;
+      const hist = buildHistogram(resized.data, resized.width, resized.height, {
+        alphaThreshold,
+        includeWhite,
+        step,
+      });
+      const res = quantizeWu(hist, colorCount);
+      rawPalette = res.palette;
+      populations = res.populations;
+      sampledTotal = hist.total;
+    }
+  } else {
+    const hist = buildHistogram(resized.data, resized.width, resized.height, {
+      alphaThreshold,
+      includeWhite,
+      step,
+    });
+    const res = quantizeWu(hist, colorCount);
+    rawPalette = res.palette;
+    populations = res.populations;
+    sampledTotal = hist.total;
+  }
+
   const sorted = sortPaletteByDominance(rawPalette, populations);
   const quantizeMs = now() - tQuant;
 
@@ -170,7 +213,7 @@ export async function getPalette(
       path: "full-decode",
       width: decoded.width,
       height: decoded.height,
-      sampledPixels: hist.total,
+      sampledPixels: sampledTotal,
       decodeMs,
       quantizeMs,
       totalMs: now() - tStart,

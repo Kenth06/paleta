@@ -14,3 +14,13 @@ export {
 } from "./histogram.js";
 
 export { quantizeWu, type WuResult } from "./wu.js";
+
+export {
+  initWasm,
+  initWasmSync,
+  isWasmReady,
+  quantizeWuWasm,
+  wasmVersion,
+  WasmNotInitializedError,
+  type WasmQuantizeOptions,
+} from "./wasm.js";

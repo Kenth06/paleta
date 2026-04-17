@@ -66,6 +66,11 @@ export interface PaletteOptions {
   signal?: AbortSignal;
   /** Cache key override — defaults to `source+opts` hash. */
   cacheKey?: string;
+  /**
+   * Use the WASM quantizer when it's been initialized. Default: auto-detect
+   * via isWasmReady(). Set false to force the pure-JS path.
+   */
+  useWasm?: boolean;
 }
 
 export interface PaletteMeta {

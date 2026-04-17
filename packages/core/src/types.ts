@@ -71,6 +71,19 @@ export interface PaletteOptions {
    * via isWasmReady(). Set false to force the pure-JS path.
    */
   useWasm?: boolean;
+  /**
+   * Optional JPEG thumbnail extractor. When provided and the input is JPEG,
+   * the pipeline tries the extractor first; if it yields a thumbnail, that
+   * thumbnail is decoded instead of the full image (much faster). Typically
+   * `extractExifThumbnail` from `@paleta/exif`.
+   */
+  thumbnailExtractor?: (bytes: Uint8Array) => { bytes: Uint8Array } | Uint8Array | undefined;
+  /**
+   * Minimum thumbnail side length (pixels) below which we skip the fast path
+   * and decode the full image. Only relevant when `thumbnailExtractor` is set.
+   * Default 64. Set to 0 to always use the thumbnail when present.
+   */
+  minThumbnailDimension?: number;
 }
 
 export interface PaletteMeta {

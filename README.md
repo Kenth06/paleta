@@ -53,7 +53,7 @@ console.log(result.meta.path); // "exif-thumb" | "full-decode" | "cache-hit"
 
 - [x] v0.1 — TS kernel, jSquash adapters, deployable Worker
 - [x] v0.2 — Rust+SIMD WASM quantizer (3.38× faster on 128×128, 7.7× p99)
-- [ ] v0.3 — EXIF thumbnail fast path + JPEG DC-only decoder
+- [~] v0.3 — **EXIF thumbnail fast path ✅** + JPEG DC-only decoder (pending)
 - [ ] v0.4 — Durable Object cross-colo palette cache
 - [ ] v0.5 — Containers tier for HEIC/TIFF
 - [ ] v1.0 — stable

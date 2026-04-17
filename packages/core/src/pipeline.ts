@@ -45,7 +45,26 @@ const DEFAULTS = {
   includeWhite: false,
   algorithm: "wu" as const,
   cacheTTL: 86_400,
+  minThumbnailDimension: 64,
 };
+
+/**
+ * Normalize the two accepted extractor return shapes into a flat Uint8Array
+ * or `undefined`. Also validates that the returned bytes look like a JPEG —
+ * a thumbnail that isn't JPEG is not something our pipeline can re-decode.
+ */
+function runThumbnailExtractor(
+  extractor: NonNullable<PaletteOptions["thumbnailExtractor"]>,
+  bytes: Uint8Array,
+): Uint8Array | undefined {
+  const out = extractor(bytes);
+  if (!out) return undefined;
+  const thumb = out instanceof Uint8Array ? out : out.bytes;
+  if (!thumb || thumb.length < 4) return undefined;
+  // Must start with JPEG SOI for our pipeline to re-decode it.
+  if (thumb[0] !== 0xff || thumb[1] !== 0xd8) return undefined;
+  return thumb;
+}
 
 function resolveDecoder(
   format: ImageFormat,
@@ -144,8 +163,29 @@ export async function getPalette(
     );
   }
 
+  let pipelinePath: PipelinePath = "full-decode";
+  let decodeBytesSource: Uint8Array = norm.bytes;
+
+  if (format === "jpeg" && opts.thumbnailExtractor) {
+    const thumb = runThumbnailExtractor(opts.thumbnailExtractor, norm.bytes);
+    if (thumb) {
+      decodeBytesSource = thumb;
+      pipelinePath = "exif-thumb";
+    }
+  }
+
   const tDecode = now();
-  const decoded = await decodeBytes(format, norm.bytes, decoder);
+  let decoded = await decodeBytes(format, decodeBytesSource, decoder);
+
+  // If the thumbnail is too small to be useful, fall back to full decode.
+  if (
+    pipelinePath === "exif-thumb" &&
+    Math.min(decoded.width, decoded.height) <
+      (opts.minThumbnailDimension ?? DEFAULTS.minThumbnailDimension)
+  ) {
+    decoded = await decodeBytes(format, norm.bytes, decoder);
+    pipelinePath = "full-decode";
+  }
   const decodeMs = now() - tDecode;
 
   const maxDim = opts.maxDimension ?? DEFAULTS.maxDimension;
@@ -210,7 +250,7 @@ export async function getPalette(
     oklch: sorted.oklch,
     meta: {
       format,
-      path: "full-decode",
+      path: pipelinePath,
       width: decoded.width,
       height: decoded.height,
       sampledPixels: sampledTotal,

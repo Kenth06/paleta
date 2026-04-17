@@ -25,9 +25,41 @@ pnpm add @jsquash/jpeg @jsquash/png @jsquash/webp @jsquash/avif
 
 ## Quick start
 
+### On a Cloudflare Worker
+
 ```ts
-import { getPalette } from "@paleta/core";
+import { getPalette, initWasm } from "@paleta/core";
 import { autoDecoders } from "@paleta/jsquash";
+// wrangler.jsonc: [[rules]] type = "CompiledWasm", globs = ["**/*.wasm"]
+import paletaWasm from "@paleta/core/wasm";
+
+let ready: Promise<void> | undefined;
+const ensureWasm = () => (ready ??= initWasm(paletaWasm as WebAssembly.Module));
+
+export default {
+  async fetch(req: Request) {
+    await ensureWasm();
+    const url = new URL(req.url).searchParams.get("url")!;
+    const result = await getPalette(url, {
+      decoders: autoDecoders(),
+      cache: caches.default,
+      colorCount: 8,
+    });
+    return Response.json(result);
+  },
+};
+```
+
+### On Node / Bun / browsers
+
+```ts
+import { getPalette, initWasm } from "@paleta/core";
+import { autoDecoders } from "@paleta/jsquash";
+import { readFile } from "node:fs/promises";
+
+await initWasm(await readFile(
+  new URL("@paleta/core/wasm", import.meta.url),
+));
 
 const result = await getPalette("https://example.com/cat.jpg", {
   decoders: autoDecoders(),
@@ -36,8 +68,13 @@ const result = await getPalette("https://example.com/cat.jpg", {
 
 console.log(result.palette);   // [[r,g,b], ...] sorted by perceptual dominance
 console.log(result.dominant);  // most-present color
-console.log(result.meta.path); // "exif-thumb" | "full-decode" | "cache-hit"
+console.log(result.meta.path); // "cache-hit" | "exif-thumb" | "full-decode"
 ```
+
+### Without WASM (pure TypeScript)
+
+Skip `initWasm()` entirely. The pipeline falls back to a pure-JS Wu quantizer.
+Slower but portable to any runtime; also avoids the 27KB WASM payload.
 
 ## Packages
 

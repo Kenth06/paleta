@@ -24,9 +24,11 @@
     "./oklab": {
       "types": "./dist/oklab.d.ts",
       "import": "./dist/oklab.js"
-    }
+    },
+    "./wasm": "./wasm/paleta_core_bg.wasm",
+    "./wasm.js": "./wasm/paleta_core.js"
   },
-  "files": ["dist", "README.md"],
+  "files": ["dist", "wasm", "README.md"],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit"

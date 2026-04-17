@@ -10,11 +10,37 @@
  * region).
  */
 
-import { getPalette, pickAccent, PaletteError, type RGB } from "@paleta/core";
+import {
+  getPalette,
+  initWasm,
+  isWasmReady,
+  pickAccent,
+  PaletteError,
+  type RGB,
+} from "@paleta/core";
 import { autoDecoders } from "@paleta/jsquash";
+
+// The wrangler CompiledWasm rule turns this into a WebAssembly.Module at
+// build time, giving us a cold-start-friendly zero-parse instantiation.
+// @ts-expect-error — resolved by wrangler, not TS.
+import paletaWasm from "@paleta/core/wasm";
 
 interface Env {
   ALLOWED_HOSTS?: string;
+}
+
+// Initialize WASM once per isolate. The first request pays the init cost
+// (~5ms for 27KB of WASM); subsequent requests reuse the instantiated module.
+let wasmReady: Promise<void> | undefined;
+function ensureWasm(): Promise<void> {
+  if (isWasmReady()) return Promise.resolve();
+  wasmReady ??= initWasm(paletaWasm as WebAssembly.Module).catch((err) => {
+    // Clear the promise so we can retry on the next request, but never block
+    // the request — fall back to pure-JS quantizer.
+    wasmReady = undefined;
+    console.warn("paleta WASM init failed, falling back to JS:", err);
+  });
+  return wasmReady;
 }
 
 function json(body: unknown, init?: ResponseInit): Response {
@@ -80,6 +106,7 @@ export default {
     const bgRgb = bg ? parseHexColor(bg) : undefined;
 
     try {
+      await ensureWasm();
       const result = await getPalette(targetUrl.toString(), {
         decoders: autoDecoders(),
         cache: caches.default,

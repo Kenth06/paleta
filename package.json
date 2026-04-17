@@ -18,6 +18,9 @@
     "clean": "pnpm -r exec rm -rf dist .turbo node_modules/.cache"
   },
   "devDependencies": {
+    "@paleta/core": "workspace:*",
+    "@paleta/exif": "workspace:*",
+    "@paleta/jsquash": "workspace:*",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",

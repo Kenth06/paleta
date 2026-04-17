@@ -8,6 +8,15 @@ importers:
 
   .:
     devDependencies:
+      '@paleta/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@paleta/exif':
+        specifier: workspace:*
+        version: link:packages/exif
+      '@paleta/jsquash':
+        specifier: workspace:*
+        version: link:packages/jsquash
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.17

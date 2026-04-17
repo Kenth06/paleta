@@ -1,0 +1,14 @@
+node_modules
+dist
+.wrangler
+.turbo
+.DS_Store
+*.log
+*.tsbuildinfo
+coverage
+target
+pkg
+*.wasm.gz
+.env
+.env.*
+!.env.example

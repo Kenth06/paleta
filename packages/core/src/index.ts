@@ -21,8 +21,15 @@ export {
 export {
   quantizeWu,
   buildHistogram,
+  initWasm,
+  initWasmSync,
+  isWasmReady,
+  quantizeWuWasm,
+  wasmVersion,
+  WasmNotInitializedError,
   type HistogramResult,
   type WuResult,
+  type WasmQuantizeOptions,
 } from "./quantize/index.js";
 export { resizeNearestRGBA } from "./resize.js";
 export { hashKey } from "./cache.js";

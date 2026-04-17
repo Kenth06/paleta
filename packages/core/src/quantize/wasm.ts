@@ -56,7 +56,8 @@ export async function initWasm(
     const loaded = (await import("../../wasm/paleta_core.js")) as unknown as WasmModule & {
       default: (input: unknown) => Promise<unknown>;
     };
-    await loaded.default(source);
+    // wasm-bindgen 0.2.100+ prefers `{ module_or_path: ... }` over raw bytes.
+    await loaded.default({ module_or_path: source as never });
     mod = loaded;
   })();
   return initPromise;

@@ -10,6 +10,7 @@ Persistent notebook across Claude sessions. Append-only. Read before starting wo
 - jSquash releases: **2026-04-17**
 - quantette crate: **2026-04-17**
 - photon-rs crate: **2026-04-17**
+- wasm-bindgen: **0.2.118 (2026-04-17)**
 
 ## Notable platform state (as of last-checked)
 
@@ -52,6 +53,37 @@ Keep only `["ES2023"]` and add `types: ["@cloudflare/workers-types"]`.
 Library packages (`@paleta/core`) keep DOM since they need `fetch`/`Response`
 in non-Worker runtimes.
 
+### 2026-04-17 — vitest bench does not await `beforeAll`
+**What**: Put `await initWasm(bytes)` inside `beforeAll`. The bench ran with
+0 samples because WasmNotInitializedError was thrown every iteration and
+silently counted as "unable to measure".
+**Why**: Assumed bench shares the `beforeAll` contract with `test`. It doesn't
+— bench internals don't defer the bench loop on async setup.
+**Avoid next time**: For bench files that need async setup, use **top-level
+await** directly at module scope. ESM bench files support this.
+
+### 2026-04-17 — wasm-bindgen 0.2.100+ wants object-form init params
+**What**: Called `init(bytes)` where `bytes` is a Uint8Array. It worked but
+logged `using deprecated parameters for the initialization function; pass a
+single object instead` at every init.
+**Why**: The init signature changed to accept `{ module_or_path: ... }` to
+support additional knobs (custom imports, memory) without breaking callers.
+**Avoid next time**: Always call as
+`await init({ module_or_path: <bytes | URL | Module> })`. Cast as needed —
+the .d.ts option type is a union that includes the object form.
+
+### 2026-04-17 — tsup caches — add new exports to both index.ts AND rebuild
+**What**: Added `initWasm`, `isWasmReady`, `quantizeWuWasm` to
+`quantize/index.ts` but not to `src/index.ts`. Tests importing from
+`@paleta/core` failed with `initWasm is not a function` because the
+workspace resolves to `packages/core/dist/index.js`.
+**Why**: Forgot that the package's public surface is `src/index.ts`, not
+whatever happens to be re-exported from a submodule. Additionally, `dist/`
+is cached; edits to `src/` don't reach consumers until `pnpm build` runs.
+**Avoid next time**: When adding a new export, update `src/index.ts` first
+then rebuild. Better: add a workspace-level `pnpm build` pre-test hook so
+`pnpm test` always sees fresh dist outputs.
+
 ### 2026-04-17 — exactOptionalPropertyTypes vs `signal: undefined`
 **What**: Passed `{ signal: opts?.signal, redirect: "follow" }` to `fetch()` with
 `exactOptionalPropertyTypes: true`. TS rejected it because `RequestInit.signal`
@@ -70,3 +102,12 @@ than `X | undefined`.
 ## Wins
 
 *(Record unexpected performance wins so they don't get reverted.)*
+
+### 2026-04-17 — Rust Wu quantizer p99 beats JS by 7.7× on 128×128
+**What**: Pure-JS mean 0.83ms, p99 3.07ms. Rust WASM mean 0.25ms, **p99
+0.40ms**. The mean speedup is 3.4× but the p99 is 7.7×.
+**Why it matters**: In a Workers isolate with noisy neighbors and GC
+pauses, the p99 (not the mean) is what user-facing latency looks like.
+**Don't revert**: The Rust port's `split_at_mut` pattern (two mutable refs
+into one Vec) is subtle. Future refactors that switch to `Vec<Rc<Box>>` or
+`boxes.clone()` will eat the win. Keep the split_at_mut dance.

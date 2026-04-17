@@ -1,0 +1,24 @@
+{
+  "name": "@paleta/example-minimal-worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Deployable /palette?url=... Cloudflare Worker using paleta.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@paleta/core": "workspace:*",
+    "@paleta/jsquash": "workspace:*",
+    "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/png": "^3.1.0",
+    "@jsquash/webp": "^1.5.0",
+    "@jsquash/avif": "^2.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250628.0",
+    "wrangler": "^3.88.0"
+  }
+}

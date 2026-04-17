@@ -40,6 +40,18 @@ Persistent notebook across Claude sessions. Append-only. Read before starting wo
 
 *(Record here when you get something wrong. Include date, what, why, and how to avoid.)*
 
+### 2026-04-17 — Worker packages must drop DOM lib for `caches.default` typing
+**What**: Worker `tsconfig` inherited `lib: ["DOM", "DOM.Iterable"]` from the
+base. That pulls in DOM's `CacheStorage` type, which has `match()` / `open()`
+but not `.default`. Cloudflare's `@cloudflare/workers-types` augments
+`CacheStorage` with `.default`, but DOM's plain `CacheStorage` shadows it.
+**Why**: Assumed `@cloudflare/workers-types` is additive. It's only additive
+when DOM isn't also pulled in.
+**Avoid next time**: In Worker-specific packages, override `lib` to drop DOM.
+Keep only `["ES2023"]` and add `types: ["@cloudflare/workers-types"]`.
+Library packages (`@paleta/core`) keep DOM since they need `fetch`/`Response`
+in non-Worker runtimes.
+
 ### 2026-04-17 — exactOptionalPropertyTypes vs `signal: undefined`
 **What**: Passed `{ signal: opts?.signal, redirect: "follow" }` to `fetch()` with
 `exactOptionalPropertyTypes: true`. TS rejected it because `RequestInit.signal`

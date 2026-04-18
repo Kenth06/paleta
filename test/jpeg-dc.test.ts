@@ -41,13 +41,12 @@ describe("decodeJpegDcOnly — graceful failure", () => {
     expect(await decodeJpegDcOnly(bytes)).toBeUndefined();
   });
 
-  it("returns undefined for progressive-JPEG SOF2 marker", async () => {
-    // SOI + SOF2 (progressive) + EOI. SOF2 = 0xFFC2 which is explicitly
-    // rejected by the decoder. Length-field points into a bogus payload so
-    // the parser bails without throwing.
+  it("returns undefined for obviously malformed SOF2 bytes", async () => {
+    // SOI + SOF2 with only-header length + EOI. The parser recognizes SOF2
+    // now but can't find a valid scan after it, so it falls through.
     const bytes = new Uint8Array([
       0xff, 0xd8,
-      0xff, 0xc2, 0x00, 0x02, // SOF2 with minimum length
+      0xff, 0xc2, 0x00, 0x02, // SOF2 length=2 (empty payload)
       0xff, 0xd9,             // EOI
     ]);
     expect(await decodeJpegDcOnly(bytes)).toBeUndefined();
@@ -97,6 +96,92 @@ describe("decodeJpegDcOnly — real JPEG", () => {
     // at the boundary (JPEG DC blurs across the 8-pixel split).
     expect(redCount).toBeGreaterThan(24);
     expect(blueCount).toBeGreaterThan(24);
+  });
+
+  it("decodes a 128×96 grayscale JPEG (1 component) to 16×12 with R=G=B", async () => {
+    const fixturePath = fileURLToPath(
+      new URL("./fixtures/paleta-gray.jpg", import.meta.url),
+    );
+    const bytes = new Uint8Array(await readFile(fixturePath));
+    const decoded = await decodeJpegDcOnly(bytes);
+    expect(decoded).toBeDefined();
+    if (!decoded) return;
+
+    expect(decoded.width).toBe(16);
+    expect(decoded.height).toBe(12);
+
+    // Grayscale must produce R=G=B at every pixel (no color introduced).
+    for (let i = 0; i < decoded.width * decoded.height; i++) {
+      const r = decoded.data[i * 4]!;
+      const g = decoded.data[i * 4 + 1]!;
+      const b = decoded.data[i * 4 + 2]!;
+      expect(r).toBe(g);
+      expect(g).toBe(b);
+    }
+
+    // Gradient check: left column should be darker than right column on average.
+    const leftAvg = decoded.data[4 * 0]! + decoded.data[4 * (decoded.width * 5)]!;
+    const rightAvg = decoded.data[4 * (decoded.width - 1)]!
+      + decoded.data[4 * (decoded.width * 5 + decoded.width - 1)]!;
+    expect(rightAvg).toBeGreaterThan(leftAvg);
+  });
+
+  it("decodes a 128×96 baseline 4:2:2 JPEG to 16×12", async () => {
+    const fixturePath = fileURLToPath(
+      new URL("./fixtures/paleta-422.jpg", import.meta.url),
+    );
+    const bytes = new Uint8Array(await readFile(fixturePath));
+    const decoded = await decodeJpegDcOnly(bytes);
+    expect(decoded).toBeDefined();
+    if (!decoded) return;
+
+    expect(decoded.width).toBe(16);
+    expect(decoded.height).toBe(12);
+
+    // The fixture has R increasing along X, G increasing along Y.
+    // Top-left should be dark, bottom-right should have high R+G.
+    const tl = [decoded.data[0]!, decoded.data[1]!, decoded.data[2]!];
+    const brIdx = ((decoded.height - 1) * decoded.width + decoded.width - 1) * 4;
+    const br = [decoded.data[brIdx]!, decoded.data[brIdx + 1]!, decoded.data[brIdx + 2]!];
+
+    expect(br[0]! + br[1]!).toBeGreaterThan(tl[0]! + tl[1]!);
+  });
+
+  it("decodes a 128×128 progressive JPEG (four quadrants) to 16×16", async () => {
+    const fixturePath = fileURLToPath(
+      new URL("./fixtures/paleta-progressive.jpg", import.meta.url),
+    );
+    const bytes = new Uint8Array(await readFile(fixturePath));
+    const decoded = await decodeJpegDcOnly(bytes);
+    expect(
+      decoded,
+      "DC-only decoder returned undefined on a progressive JPEG.",
+    ).toBeDefined();
+    if (!decoded) return;
+
+    expect(decoded.width).toBe(16);
+    expect(decoded.height).toBe(16);
+
+    const sample = (qx: number, qy: number) => {
+      const cx = qx * 8 + 4;
+      const cy = qy * 8 + 4;
+      const i = (cy * 16 + cx) * 4;
+      return [decoded.data[i]!, decoded.data[i + 1]!, decoded.data[i + 2]!];
+    };
+
+    const [tlR, tlG, tlB] = sample(0, 0);
+    const [trR, trG, trB] = sample(1, 0);
+    const [blR, blG, blB] = sample(0, 1);
+    const [brR, brG, brB] = sample(1, 1);
+
+    // Dominant-channel per quadrant. Progressive DC scans lose some
+    // precision (they only carry DC, level-shifted), so tolerances are
+    // wider than for baseline.
+    expect(tlR).toBeGreaterThan(tlB);       // red TL
+    expect(trG).toBeGreaterThan(trR);       // green TR
+    expect(blB).toBeGreaterThan(blR);       // blue BL
+    expect(brR).toBeGreaterThan(brB);       // amber BR
+    expect(brG).toBeGreaterThan(brB);
   });
 
   it("decodes a 128×128 baseline 4:2:0 JPEG (four quadrants) to 16×16", async () => {

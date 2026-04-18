@@ -49,7 +49,8 @@ pub struct DcImage {
 /* --- segment markers --- */
 const SOI: u8 = 0xd8;
 const EOI: u8 = 0xd9;
-const SOF0: u8 = 0xc0;
+const SOF0: u8 = 0xc0; // baseline sequential
+const SOF2: u8 = 0xc2; // progressive
 const DHT: u8 = 0xc4;
 const DQT: u8 = 0xdb;
 const DRI: u8 = 0xdd;
@@ -103,6 +104,7 @@ struct FrameInfo {
     width: u16,
     height: u16,
     components: Vec<ComponentInfo>,
+    progressive: bool,
 }
 
 pub fn decode(bytes: &[u8]) -> Option<DcImage> {
@@ -145,7 +147,8 @@ pub fn decode(bytes: &[u8]) -> Option<DcImage> {
 
         match marker {
             DQT => parse_dqt(payload, &mut qts)?,
-            SOF0 => frame = Some(parse_sof0(payload)?),
+            SOF0 => frame = Some(parse_sof(payload, false)?),
+            SOF2 => frame = Some(parse_sof(payload, true)?),
             DHT => parse_dht(payload, &mut dc_huff, &mut ac_huff)?,
             DRI => {
                 if payload.len() < 2 {
@@ -154,9 +157,23 @@ pub fn decode(bytes: &[u8]) -> Option<DcImage> {
                 restart_interval = ((payload[0] as u16) << 8) | (payload[1] as u16);
             }
             SOS => {
-                let frame = frame.as_ref()?;
+                let fr = frame.as_ref()?;
+                if fr.progressive {
+                    // Progressive: the DC-first scan (Ss=0, Se=0, Ah=0) is
+                    // what we want. Subsequent scans refine or carry AC —
+                    // we ignore them since palette extraction doesn't need
+                    // the extra precision.
+                    return decode_progressive_dc_scan(
+                        fr,
+                        &qts,
+                        &dc_huff,
+                        payload,
+                        &bytes[payload_end..],
+                        restart_interval,
+                    );
+                }
                 return decode_scan(
-                    frame,
+                    fr,
                     &qts,
                     &dc_huff,
                     &ac_huff,
@@ -165,8 +182,8 @@ pub fn decode(bytes: &[u8]) -> Option<DcImage> {
                     restart_interval,
                 );
             }
-            // SOF2 (progressive) and friends: unsupported.
-            0xc2 | 0xc3 | 0xc5..=0xcf => return None,
+            // Other SOF variants (SOF3 lossless, SOF5..SOF15 etc.) — unsupported.
+            0xc3 | 0xc5..=0xcf => return None,
             _ => { /* ignore APPn, COM, etc. */ }
         }
 
@@ -208,7 +225,7 @@ fn parse_dqt(payload: &[u8], qts: &mut [Option<QTable>; 4]) -> Option<()> {
     Some(())
 }
 
-fn parse_sof0(payload: &[u8]) -> Option<FrameInfo> {
+fn parse_sof(payload: &[u8], progressive: bool) -> Option<FrameInfo> {
     if payload.len() < 6 {
         return None;
     }
@@ -219,8 +236,9 @@ fn parse_sof0(payload: &[u8]) -> Option<FrameInfo> {
     let height = ((payload[1] as u16) << 8) | (payload[2] as u16);
     let width = ((payload[3] as u16) << 8) | (payload[4] as u16);
     let nf = payload[5] as usize;
-    if nf != 3 {
-        // Only YCbCr/RGB triples for now — gray/CMYK unsupported.
+    if nf != 1 && nf != 3 {
+        // Supported: grayscale (1 component) and YCbCr/RGB (3 components).
+        // CMYK (4) and weird layouts fall through to the regular decoder.
         return None;
     }
     if payload.len() < 6 + nf * 3 {
@@ -243,7 +261,7 @@ fn parse_sof0(payload: &[u8]) -> Option<FrameInfo> {
             ac_huff_id: 0,
         });
     }
-    Some(FrameInfo { width, height, components })
+    Some(FrameInfo { width, height, components, progressive })
 }
 
 fn parse_dht(
@@ -353,21 +371,26 @@ fn decode_scan(
         c.ac_huff_id = ac_id;
     }
 
-    // Only YCbCr (3 components) where Y carries the luma info we actually
-    // use for palette color. We still decode Cb/Cr because the MCU bit
-    // stream interleaves them.
-    if comps.len() != 3 {
+    if comps.len() != 1 && comps.len() != 3 {
         return None;
     }
+    let grayscale = comps.len() == 1;
 
     // Max sampling factors determine MCU size.
     let h_max = comps.iter().map(|c| c.h).max()?;
     let v_max = comps.iter().map(|c| c.v).max()?;
 
-    // We support 4:4:4 (h_max=1, v_max=1) and 4:2:0 (h_max=2, v_max=2).
-    let subsample = match (h_max, v_max) {
-        (1, 1) => Subsampling::S444,
-        (2, 2) => Subsampling::S420,
+    // Supported layouts (luma sampling per MCU, chroma is always 1×1 except
+    // grayscale which is 1 component total):
+    //   4:4:4   h=1, v=1   grayscale or color
+    //   4:2:2   h=2, v=1   color only
+    //   4:4:0   h=1, v=2   color only (rare)
+    //   4:2:0   h=2, v=2   color only
+    let subsample = match (h_max, v_max, grayscale) {
+        (1, 1, _) => Subsampling::S444,
+        (2, 1, false) => Subsampling::S422,
+        (1, 2, false) => Subsampling::S440,
+        (2, 2, false) => Subsampling::S420,
         _ => return None,
     };
 
@@ -385,26 +408,19 @@ fn decode_scan(
     let mut cr = vec![128u8; out_w * out_h];
 
     // Dequant constants: DC element is index 0 of the zigzag-natural order.
-    let q_dc: [u16; 3] = [
-        qts[comps[0].qt_id as usize].as_ref()?.values[0],
-        qts[comps[1].qt_id as usize].as_ref()?.values[0],
-        qts[comps[2].qt_id as usize].as_ref()?.values[0],
-    ];
-
-    let dc_tables: [&HuffmanTable; 3] = [
-        dc_huff[comps[0].dc_huff_id as usize].as_ref()?,
-        dc_huff[comps[1].dc_huff_id as usize].as_ref()?,
-        dc_huff[comps[2].dc_huff_id as usize].as_ref()?,
-    ];
-    let ac_tables: [&HuffmanTable; 3] = [
-        ac_huff[comps[0].ac_huff_id as usize].as_ref()?,
-        ac_huff[comps[1].ac_huff_id as usize].as_ref()?,
-        ac_huff[comps[2].ac_huff_id as usize].as_ref()?,
-    ];
+    let mut q_dc = [0u16; 3];
+    let mut dc_tables: Vec<&HuffmanTable> = Vec::with_capacity(comps.len());
+    let mut ac_tables: Vec<&HuffmanTable> = Vec::with_capacity(comps.len());
+    for (i, c) in comps.iter().enumerate() {
+        q_dc[i] = qts[c.qt_id as usize].as_ref()?.values[0];
+        dc_tables.push(dc_huff[c.dc_huff_id as usize].as_ref()?);
+        ac_tables.push(ac_huff[c.ac_huff_id as usize].as_ref()?);
+    }
 
     let mut reader = BitReader::new(entropy);
     let mut dc_prev = [0i32; 3];
     let mut mcu_counter: u16 = 0;
+    let ncomp = comps.len();
 
     for my in 0..mcus_y {
         for mx in 0..mcus_x {
@@ -413,7 +429,15 @@ fn decode_scan(
                 let blocks = (comp.h * comp.v) as usize;
                 for bi in 0..blocks {
                     let dc = decode_block_dc(&mut reader, dc_tables[ci], &mut dc_prev[ci])?;
-                    if ci == 0 {
+                    if ncomp == 1 {
+                        // Grayscale: one-block-per-MCU, Y only.
+                        let out_x = mx;
+                        let out_y = my;
+                        if out_x < out_w && out_y < out_h {
+                            let value = dequantize_and_levelshift(dc, q_dc[0]);
+                            luma[out_y * out_w + out_x] = value;
+                        }
+                    } else if ci == 0 {
                         // Y component: store DC at the sub-block's position.
                         let bx_in_mcu = bi % comp.h as usize;
                         let by_in_mcu = bi / comp.h as usize;
@@ -424,7 +448,7 @@ fn decode_scan(
                             luma[out_y * out_w + out_x] = value;
                         }
                     } else if matches!(subsample, Subsampling::S444) {
-                        // 4:4:4: chroma at same resolution as luma.
+                        // 4:4:4: chroma at same resolution as luma (1 block per MCU).
                         if bi == 0 {
                             let out_x = mx;
                             let out_y = my;
@@ -438,14 +462,17 @@ fn decode_scan(
                             }
                         }
                     } else {
-                        // 4:2:0: one chroma block covers a 2×2 luma region.
+                        // Subsampled chroma: one chroma block covers (h_max × v_max)
+                        // luma-resolution positions per MCU. We compute the MCU's
+                        // top-left luma coordinate and fill a (h_max × v_max) patch.
                         if bi == 0 {
                             let value = dequantize_and_levelshift(dc, q_dc[ci]);
-                            // Fill 2×2 luma-resolution positions with this value.
-                            for dy in 0..2 {
-                                for dx in 0..2 {
-                                    let ox = mx * 2 + dx;
-                                    let oy = my * 2 + dy;
+                            let hm = h_max as usize;
+                            let vm = v_max as usize;
+                            for dy in 0..vm {
+                                for dx in 0..hm {
+                                    let ox = mx * hm + dx;
+                                    let oy = my * vm + dy;
                                     if ox < out_w && oy < out_h {
                                         if ci == 1 {
                                             cb[oy * out_w + ox] = value;
@@ -475,19 +502,224 @@ fn decode_scan(
         }
     }
 
-    // YCbCr → RGB at output resolution.
+    // Produce RGBA. Grayscale: broadcast Y to all channels.
     let mut rgba = vec![0u8; out_w * out_h * 4];
-    for i in 0..(out_w * out_h) {
-        let y = luma[i] as i32;
-        let cb_v = cb[i] as i32 - 128;
-        let cr_v = cr[i] as i32 - 128;
-        let r = clamp_byte(y + (45 * cr_v >> 5));
-        let g = clamp_byte(y - (11 * cb_v + 23 * cr_v >> 5));
-        let b = clamp_byte(y + (113 * cb_v >> 6));
-        rgba[i * 4] = r;
-        rgba[i * 4 + 1] = g;
-        rgba[i * 4 + 2] = b;
-        rgba[i * 4 + 3] = 255;
+    if ncomp == 1 {
+        for i in 0..(out_w * out_h) {
+            let y = luma[i];
+            rgba[i * 4] = y;
+            rgba[i * 4 + 1] = y;
+            rgba[i * 4 + 2] = y;
+            rgba[i * 4 + 3] = 255;
+        }
+    } else {
+        for i in 0..(out_w * out_h) {
+            let y = luma[i] as i32;
+            let cb_v = cb[i] as i32 - 128;
+            let cr_v = cr[i] as i32 - 128;
+            let r = clamp_byte(y + (45 * cr_v >> 5));
+            let g = clamp_byte(y - (11 * cb_v + 23 * cr_v >> 5));
+            let b = clamp_byte(y + (113 * cb_v >> 6));
+            rgba[i * 4] = r;
+            rgba[i * 4 + 1] = g;
+            rgba[i * 4 + 2] = b;
+            rgba[i * 4 + 3] = 255;
+        }
+    }
+
+    Some(DcImage {
+        data: rgba,
+        width: out_w as u32,
+        height: out_h as u32,
+    })
+}
+
+/// Decode a progressive-JPEG "DC first" scan (Ss=0, Se=0, Ah=0).
+///
+/// Progressive JPEGs split coefficients across multiple scans. The very first
+/// scan always carries DC values (possibly with a successive-approximation
+/// shift Al > 0, meaning "top N-Al bits only"). Later scans refine DC and
+/// add AC — we ignore them since palette extraction doesn't need that
+/// precision.
+///
+/// On unsupported scan types (AC scan, DC refinement) returns `None` so the
+/// caller falls back to the full decoder.
+fn decode_progressive_dc_scan(
+    frame: &FrameInfo,
+    qts: &[Option<QTable>; 4],
+    dc_huff: &[Option<HuffmanTable>; 4],
+    sos_header: &[u8],
+    entropy: &[u8],
+    restart_interval: u16,
+) -> Option<DcImage> {
+    // SOS format: Ns + (Cs,Ta) * Ns + Ss + Se + Ah|Al (3 bytes tail)
+    if sos_header.is_empty() {
+        return None;
+    }
+    let ns = sos_header[0] as usize;
+    if ns == 0 || ns > 3 || 1 + ns * 2 + 3 > sos_header.len() {
+        return None;
+    }
+    let tail_off = 1 + ns * 2;
+    let ss = sos_header[tail_off];
+    let se = sos_header[tail_off + 1];
+    let ah_al = sos_header[tail_off + 2];
+    let ah = ah_al >> 4;
+    let al = ah_al & 0x0f;
+
+    // Only accept DC-first scans.
+    if ss != 0 || se != 0 || ah != 0 {
+        return None;
+    }
+
+    // Pair components.
+    let mut comps: Vec<ComponentInfo> = Vec::with_capacity(ns);
+    for i in 0..ns {
+        let sel = sos_header[1 + i * 2];
+        let table_ids = sos_header[2 + i * 2];
+        let dc_id = table_ids >> 4;
+        let frame_c = frame.components.iter().find(|c| c.id == sel)?;
+        comps.push(ComponentInfo {
+            id: sel,
+            h: frame_c.h,
+            v: frame_c.v,
+            qt_id: frame_c.qt_id,
+            dc_huff_id: dc_id,
+            ac_huff_id: 0,
+        });
+    }
+
+    // In progressive JPEGs, scans can be non-interleaved (one component per
+    // scan). Only interleaved scans need the multi-component MCU handling.
+    // We support both paths below.
+    let ncomp = comps.len();
+    let all_components = ncomp == frame.components.len();
+
+    // Only support grayscale (1 comp) and YCbCr (3 comps) as in baseline.
+    if frame.components.len() != 1 && frame.components.len() != 3 {
+        return None;
+    }
+    let grayscale = frame.components.len() == 1;
+
+    // For the progressive DC-first scan, we expect all components to be
+    // interleaved so we recover DC for all of them in one pass. If it's
+    // non-interleaved we'd need multi-pass coordination (not worth it for
+    // palette extraction).
+    if !all_components {
+        return None;
+    }
+
+    let h_max = frame.components.iter().map(|c| c.h).max()?;
+    let v_max = frame.components.iter().map(|c| c.v).max()?;
+
+    let subsample = match (h_max, v_max, grayscale) {
+        (1, 1, _) => Subsampling::S444,
+        (2, 1, false) => Subsampling::S422,
+        (1, 2, false) => Subsampling::S440,
+        (2, 2, false) => Subsampling::S420,
+        _ => return None,
+    };
+    let _ = subsample; // Same sub-block handling as baseline below.
+
+    let mcu_w = 8 * h_max as usize;
+    let mcu_h = 8 * v_max as usize;
+    let mcus_x = (frame.width as usize + mcu_w - 1) / mcu_w;
+    let mcus_y = (frame.height as usize + mcu_h - 1) / mcu_h;
+
+    let out_w = (frame.width as usize + 7) / 8;
+    let out_h = (frame.height as usize + 7) / 8;
+    let mut luma = vec![0u8; out_w * out_h];
+    let mut cb = vec![128u8; out_w * out_h];
+    let mut cr = vec![128u8; out_w * out_h];
+
+    let mut q_dc = [0u16; 3];
+    let mut dc_tables: Vec<&HuffmanTable> = Vec::with_capacity(ncomp);
+    for (i, c) in comps.iter().enumerate() {
+        q_dc[i] = qts[c.qt_id as usize].as_ref()?.values[0];
+        dc_tables.push(dc_huff[c.dc_huff_id as usize].as_ref()?);
+    }
+
+    let mut reader = BitReader::new(entropy);
+    let mut dc_prev = [0i32; 3];
+    let mut mcu_counter: u16 = 0;
+
+    for my in 0..mcus_y {
+        for mx in 0..mcus_x {
+            for (ci, comp) in comps.iter().enumerate() {
+                let blocks = (comp.h * comp.v) as usize;
+                for bi in 0..blocks {
+                    let dc = decode_block_dc(&mut reader, dc_tables[ci], &mut dc_prev[ci])?;
+                    // Successive approximation: for DC-first, the stored value
+                    // is `real_dc >> al`, so recover by left-shifting.
+                    let dc_shifted = dc << (al as u32);
+
+                    if ncomp == 1 {
+                        let ox = mx;
+                        let oy = my;
+                        if ox < out_w && oy < out_h {
+                            luma[oy * out_w + ox] = dequantize_and_levelshift(dc_shifted, q_dc[0]);
+                        }
+                    } else if ci == 0 {
+                        let bx = bi % comp.h as usize;
+                        let by = bi / comp.h as usize;
+                        let ox = mx * comp.h as usize + bx;
+                        let oy = my * comp.v as usize + by;
+                        if ox < out_w && oy < out_h {
+                            luma[oy * out_w + ox] = dequantize_and_levelshift(dc_shifted, q_dc[0]);
+                        }
+                    } else if bi == 0 {
+                        let value = dequantize_and_levelshift(dc_shifted, q_dc[ci]);
+                        let hm = h_max as usize;
+                        let vm = v_max as usize;
+                        for dy in 0..vm {
+                            for dx in 0..hm {
+                                let ox = mx * hm + dx;
+                                let oy = my * vm + dy;
+                                if ox < out_w && oy < out_h {
+                                    if ci == 1 {
+                                        cb[oy * out_w + ox] = value;
+                                    } else {
+                                        cr[oy * out_w + ox] = value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // No AC skipping — progressive DC-first scan contains only
+                    // DC coefficients, so each block ends after its DC symbol.
+                }
+            }
+            mcu_counter += 1;
+            if restart_interval > 0 && mcu_counter % restart_interval == 0 {
+                reader.align_to_byte();
+                reader.skip_restart_marker()?;
+                dc_prev = [0; 3];
+            }
+        }
+    }
+
+    let mut rgba = vec![0u8; out_w * out_h * 4];
+    if ncomp == 1 {
+        for i in 0..(out_w * out_h) {
+            let y = luma[i];
+            rgba[i * 4] = y;
+            rgba[i * 4 + 1] = y;
+            rgba[i * 4 + 2] = y;
+            rgba[i * 4 + 3] = 255;
+        }
+    } else {
+        for i in 0..(out_w * out_h) {
+            let y = luma[i] as i32;
+            let cb_v = cb[i] as i32 - 128;
+            let cr_v = cr[i] as i32 - 128;
+            let r = clamp_byte(y + (45 * cr_v >> 5));
+            let g = clamp_byte(y - (11 * cb_v + 23 * cr_v >> 5));
+            let b = clamp_byte(y + (113 * cb_v >> 6));
+            rgba[i * 4] = r;
+            rgba[i * 4 + 1] = g;
+            rgba[i * 4 + 2] = b;
+            rgba[i * 4 + 3] = 255;
+        }
     }
 
     Some(DcImage {
@@ -499,7 +731,9 @@ fn decode_scan(
 
 enum Subsampling {
     S444,
-    S420,
+    S422, // h=2, v=1
+    S440, // h=1, v=2
+    S420, // h=2, v=2
 }
 
 fn clamp_byte(v: i32) -> u8 {

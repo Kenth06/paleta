@@ -723,71 +723,131 @@ fn receive_extend(reader: &mut BitReader, s: u8) -> Option<i32> {
     if v < half { Some(v - (1 << s) + 1) } else { Some(v) }
 }
 
+/// Buffered bit reader: maintains a 32-bit window holding the next up-to-32
+/// bits of the entropy stream. Refills in byte chunks, honoring 0xFF 0x00
+/// byte-stuffing. Stops at real markers so restart handling can resume.
+///
+/// Contract:
+///   - Top `buf_bits` bits of `buf` are valid, MSB-first.
+///   - `peek_bits(n)` returns the next n bits right-aligned in a u32, or
+///     zero-padded on EOF.
+///   - `consume_bits(n)` advances past n bits (no-op past available bits).
+///   - `read_bit()` returns a single bit; None only on true EOF with empty buf.
+///
+/// The win vs the earlier per-byte reader: peek/consume avoid per-bit loops
+/// and per-bit branches through the refill path.
 struct BitReader<'a> {
     bytes: &'a [u8],
     pos: usize,
-    bit_pos: u8,
-    cur: u8,
-    started: bool,
+    buf: u32,
+    buf_bits: u8,
+    eof: bool,
 }
 
 impl<'a> BitReader<'a> {
-    fn new(bytes: &'a [u8]) -> Self { Self { bytes, pos: 0, bit_pos: 0, cur: 0, started: false } }
+    fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, pos: 0, buf: 0, buf_bits: 0, eof: false }
+    }
+
+    /// Try to consume one byte from the source stream, honoring
+    /// 0xFF 0x00 stuffing. Stops at real markers (stuffed = non-zero) by
+    /// rewinding `pos` to the 0xFF and setting `eof`.
+    #[inline]
+    fn next_byte(&mut self) -> Option<u8> {
+        if self.eof { return None; }
+        if self.pos >= self.bytes.len() {
+            self.eof = true;
+            return None;
+        }
+        let b = self.bytes[self.pos];
+        self.pos += 1;
+        if b != 0xff {
+            return Some(b);
+        }
+        if self.pos >= self.bytes.len() {
+            self.eof = true;
+            return None;
+        }
+        let stuffed = self.bytes[self.pos];
+        if stuffed == 0x00 {
+            self.pos += 1;
+            Some(0xff)
+        } else {
+            // Real marker — rewind so skip_restart_marker sees the 0xFF.
+            self.pos -= 1;
+            self.eof = true;
+            None
+        }
+    }
+
+    #[inline]
+    fn ensure(&mut self, bits: u8) -> bool {
+        while self.buf_bits < bits {
+            match self.next_byte() {
+                Some(b) => {
+                    let shift = 24 - self.buf_bits;
+                    self.buf |= (b as u32) << shift;
+                    self.buf_bits += 8;
+                }
+                None => return self.buf_bits >= bits,
+            }
+        }
+        true
+    }
+
+    #[inline]
+    fn peek_bits(&mut self, n: u8) -> Option<u32> {
+        if n == 0 { return Some(0); }
+        if !self.ensure(n) {
+            if self.buf_bits == 0 { return None; }
+            // Short read near EOF: return what we have, shifted into `n` width.
+            let shifted = self.buf >> (32 - self.buf_bits);
+            return Some(shifted << (n - self.buf_bits));
+        }
+        Some(self.buf >> (32 - n))
+    }
+
+    #[inline]
+    fn consume_bits(&mut self, n: u8) {
+        if n >= self.buf_bits {
+            self.buf = 0;
+            self.buf_bits = 0;
+        } else {
+            self.buf <<= n;
+            self.buf_bits -= n;
+        }
+    }
 
     #[inline]
     fn read_bit(&mut self) -> Option<u8> {
-        if !self.started || self.bit_pos == 0 {
-            if self.pos >= self.bytes.len() { return None; }
-            self.cur = self.bytes[self.pos];
-            self.pos += 1;
-            if self.cur == 0xff {
-                if self.pos >= self.bytes.len() { return None; }
-                let stuffed = self.bytes[self.pos];
-                if stuffed == 0x00 { self.pos += 1; }
-                else { return None; }
-            }
-            self.bit_pos = 8;
-            self.started = true;
+        if self.buf_bits == 0 && !self.ensure(1) {
+            return None;
         }
-        self.bit_pos -= 1;
-        Some((self.cur >> self.bit_pos) & 1)
+        let b = (self.buf >> 31) as u8;
+        self.buf <<= 1;
+        self.buf_bits -= 1;
+        Some(b)
     }
 
-    #[inline]
-    fn peek_bits(&mut self, bits: u8) -> Option<u32> {
-        let saved_pos = self.pos;
-        let saved_bit = self.bit_pos;
-        let saved_cur = self.cur;
-        let saved_started = self.started;
-        let mut out: u32 = 0;
-        let mut taken: u8 = 0;
-        while taken < bits {
-            match self.read_bit() {
-                Some(b) => { out = (out << 1) | (b as u32); taken += 1; }
-                None => { out <<= bits - taken; break; }
-            }
+    fn align_to_byte(&mut self) {
+        let drop = self.buf_bits % 8;
+        if drop > 0 {
+            self.buf <<= drop;
+            self.buf_bits -= drop;
         }
-        self.pos = saved_pos;
-        self.bit_pos = saved_bit;
-        self.cur = saved_cur;
-        self.started = saved_started;
-        Some(out)
     }
-
-    fn consume_bits(&mut self, bits: u8) {
-        for _ in 0..bits { let _ = self.read_bit(); }
-    }
-
-    fn align_to_byte(&mut self) { self.bit_pos = 0; }
 
     fn skip_restart_marker(&mut self) -> Option<()> {
+        // Dump any buffered bytes. Markers are in the raw byte stream,
+        // not in our u32 window.
+        self.buf = 0;
+        self.buf_bits = 0;
+        self.eof = false;
         if self.pos + 1 >= self.bytes.len() { return None; }
         if self.bytes[self.pos] != 0xff { return None; }
         let m = self.bytes[self.pos + 1];
         if !(0xd0..=0xd7).contains(&m) { return None; }
         self.pos += 2;
-        self.started = false;
-        self.cur = 0;
         Some(())
     }
 }

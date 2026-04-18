@@ -97,7 +97,7 @@ Slower but portable to any runtime; also avoids the 27KB WASM payload.
 
 - [x] v0.1 — TS kernel, jSquash adapters, deployable Worker
 - [x] v0.2 — Rust+SIMD WASM quantizer (2.9× mean, ~10× p99 on 128×128)
-- [x] v0.3 — EXIF thumbnail fast path ✅ + **JPEG DC-only decoder** ✅
+- [x] v0.3 — EXIF thumbnail fast path + JPEG DC-only decoder (4–12× faster than mozjpeg on real JPEGs; full baseline/progressive/grayscale/CMYK/4:2:2/4:2:0 coverage)
 - [x] v0.4 — Durable Object cross-colo palette cache (`@paleta/cache-do`)
 - [ ] v0.5 — Containers tier for HEIC/TIFF
 - [ ] v1.0 — stable

@@ -118,6 +118,36 @@ than `X | undefined`.
 
 *(Record unexpected performance wins so they don't get reverted.)*
 
+### 2026-04-17 — Buffered BitReader with rolling u32 window: another 1.4× on top
+**What**: Second pass at the buffered BitReader (first attempt broke parity
+and was reverted). This pass got it right by separating `next_byte()` (does
+one stuffing-aware byte fetch or sets `eof`) from `ensure(n)` (refills until
+we have n bits or EOF). Peek/consume/read all operate on the u32 `buf` with
+single shifts.
+**Why it works**: Per-bit `read_bit` in the old reader had a branch to
+check "do I need a new byte?" every single bit — trivially predicted but
+the memory loads compound. Buffered version does one refill per byte
+boundary and amortizes the branch across 8 bits. 1.4–1.5× speedup on top
+of the Huffman-lookup gains for a total of 11× vs the original linear scan.
+**Keep doing**: When a "per-X" function has constant-time work but runs
+N times, amortize by refilling in chunks. Same pattern applies to any
+stream-based decoder.
+
+### 2026-04-17 — Non-interleaved progressive scans need a scan-walker refactor
+**What**: Original `decode_progressive_dc_scan` handled only fully-interleaved
+progressive scans (ns=3, all components in one SOS). mozjpeg/Chrome often
+emit Y, Cb, Cr in three separate SOS scans — my decoder returned None.
+**Why**: Treating a JPEG as "one entropy blob" is wrong for progressive.
+It's fundamentally N scans, each carrying a subset of components × subset
+of coefficients. The decoder must walk scans, not return after the first.
+**Avoid next time**: For any multi-scan format, design as:
+```
+state = PassState::new(frame);
+for scan in scans: state.apply(scan);
+if state.all_done() { return state.into_output(frame); }
+```
+Even single-scan callers fit this API with ~zero overhead.
+
 ### 2026-04-17 — JPEG DC-only decoder works in one session when scoped right
 **What**: Built a working JPEG DC-only decoder in Rust — 400 lines, handles
 baseline sequential YCbCr with 4:4:4 and 4:2:0 subsampling. Validated

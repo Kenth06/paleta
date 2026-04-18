@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250628.0",
+    "@jsquash/jpeg": "^1.6.0",
     "@paleta/cache-do": "workspace:*",
     "@paleta/core": "workspace:*",
     "@paleta/exif": "workspace:*",

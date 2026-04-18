@@ -65,10 +65,22 @@ impl Default for QTable {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct HuffmanTable {
-    /// huffman codes sorted by length, indexed lane-by-lane
+    /// Fast 256-entry lookup indexed by the next 8 bits of the stream.
+    /// Each entry: high byte = code length (or 0xFF if > 8 bits), low byte = value.
+    fast: [u16; 256],
+    /// Full code table, used only when fast lookup signals overflow (code > 8 bits).
     codes: Vec<HuffCode>,
+}
+
+impl Default for HuffmanTable {
+    fn default() -> Self {
+        Self {
+            fast: [0u16; 256],
+            codes: Vec::new(),
+        }
+    }
 }
 
 #[derive(Default, Clone, Copy)]
@@ -261,6 +273,7 @@ fn parse_dht(
         p += total;
 
         let mut codes = Vec::with_capacity(total);
+        let mut fast = [0u16; 256];
         let mut code: u32 = 0;
         let mut vi = 0usize;
         for length in 1u8..=16 {
@@ -271,13 +284,24 @@ fn parse_dht(
                     length,
                     value: values[vi],
                 });
+                // Populate the fast-lookup table. For codes of length ≤ 8,
+                // every 8-bit prefix that starts with the code maps to this
+                // entry. There are 2^(8-length) such prefixes.
+                if length <= 8 {
+                    let shifted = (code << (8 - length)) as usize;
+                    let fill = 1usize << (8 - length);
+                    let entry = ((length as u16) << 8) | (values[vi] as u16);
+                    for k in 0..fill {
+                        fast[shifted + k] = entry;
+                    }
+                }
                 vi += 1;
                 code += 1;
             }
             code <<= 1;
         }
 
-        let table = HuffmanTable { codes };
+        let table = HuffmanTable { fast, codes };
         if class == 0 {
             dc_huff[id] = Some(table);
         } else {
@@ -542,10 +566,21 @@ fn skip_ac(reader: &mut BitReader, table: &HuffmanTable) -> Option<()> {
 }
 
 fn huffman_decode(reader: &mut BitReader, table: &HuffmanTable) -> Option<u8> {
-    let mut code: u32 = 0;
-    let mut length: u8 = 0;
-    // Worst-case 16 bits per symbol.
-    for _ in 0..16 {
+    // Fast path: peek 8 bits, look up in 256-entry table.
+    let prefix = reader.peek_bits(8)?;
+    let entry = table.fast[prefix as usize];
+    let len = (entry >> 8) as u8;
+    if len > 0 {
+        // Matched a ≤ 8-bit code. Consume exactly `len` bits and return value.
+        reader.consume_bits(len);
+        return Some((entry & 0xff) as u8);
+    }
+    // Slow path: code is longer than 8 bits. We already know the first 8 bits
+    // in `prefix`; continue bit by bit up to 16 total, scanning `codes`.
+    let mut code: u32 = prefix as u32;
+    reader.consume_bits(8);
+    let mut length: u8 = 8;
+    for _ in 0..8 {
         code = (code << 1) | (reader.read_bit()? as u32);
         length += 1;
         for entry in &table.codes {
@@ -576,7 +611,7 @@ fn receive_extend(reader: &mut BitReader, s: u8) -> Option<i32> {
 struct BitReader<'a> {
     bytes: &'a [u8],
     pos: usize,
-    bit_pos: u8, // 0..=7, next bit to read (from MSB)
+    bit_pos: u8,
     cur: u8,
     started: bool,
 }
@@ -586,17 +621,14 @@ impl<'a> BitReader<'a> {
         Self { bytes, pos: 0, bit_pos: 0, cur: 0, started: false }
     }
 
+    #[inline]
     fn read_bit(&mut self) -> Option<u8> {
         if !self.started || self.bit_pos == 0 {
-            if self.started && self.bit_pos == 0 {
-                // Need to fetch the next byte.
-            }
             if self.pos >= self.bytes.len() {
                 return None;
             }
             self.cur = self.bytes[self.pos];
             self.pos += 1;
-            // Byte stuffing: 0xFF 0x00 is a literal 0xFF.
             if self.cur == 0xff {
                 if self.pos >= self.bytes.len() {
                     return None;
@@ -605,7 +637,6 @@ impl<'a> BitReader<'a> {
                 if stuffed == 0x00 {
                     self.pos += 1;
                 } else {
-                    // Unexpected marker — treat as end of scan.
                     return None;
                 }
             }
@@ -613,8 +644,47 @@ impl<'a> BitReader<'a> {
             self.started = true;
         }
         self.bit_pos -= 1;
-        let bit = (self.cur >> self.bit_pos) & 1;
-        Some(bit)
+        Some((self.cur >> self.bit_pos) & 1)
+    }
+
+    /// Peek the next up-to-8 bits without consuming. Returns the bits
+    /// left-aligned (MSB is the next bit of the stream). Shorter reads
+    /// happen near EOF — caller should fall back to read_bit().
+    #[inline]
+    fn peek_bits(&mut self, bits: u8) -> Option<u32> {
+        let mut out: u32 = 0;
+        let mut taken: u8 = 0;
+        // Save reader state to rewind on short read.
+        let saved_pos = self.pos;
+        let saved_bit = self.bit_pos;
+        let saved_cur = self.cur;
+        let saved_started = self.started;
+        while taken < bits {
+            match self.read_bit() {
+                Some(b) => {
+                    out = (out << 1) | (b as u32);
+                    taken += 1;
+                }
+                None => {
+                    // Pad remaining with zeros; caller has to accept that or
+                    // fall back.
+                    out <<= bits - taken;
+                    break;
+                }
+            }
+        }
+        // Rewind — peek is non-consumptive.
+        self.pos = saved_pos;
+        self.bit_pos = saved_bit;
+        self.cur = saved_cur;
+        self.started = saved_started;
+        Some(out)
+    }
+
+    fn consume_bits(&mut self, bits: u8) {
+        for _ in 0..bits {
+            let _ = self.read_bit();
+        }
     }
 
     fn align_to_byte(&mut self) {

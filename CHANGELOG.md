@@ -5,13 +5,28 @@ All notable changes documented per Conventional Commits + Keep-a-Changelog.
 ## [Unreleased]
 
 ### Added
+- **JPEG DC-only decoder** (Rust, exposed as `decodeJpegDcOnly` +
+  `PaletteOptions.useDcOnlyJpeg`). Parses only the DC coefficients and
+  skips IDCT entirely, giving a 1/8×1/8 downsampled RGBA image for
+  roughly 1/64 the cost of a full decode. Supports baseline sequential
+  YCbCr JPEGs with 4:4:4 and 4:2:0 subsampling. Validated end-to-end
+  against PIL-generated fixtures.
+- `meta.path = 'dc-only'` reports when the fast path fires.
+- Real-image fixture suite (native PNG codec + 5 procedural fixtures,
+  PIL-generated JPEG fixtures for DC-only). ΔE_OK < 4 quality gates.
 - `examples/rpc-service`: PaletaService Worker exposing palette extraction
-  via Service Binding RPC + a consumer Worker. Demonstrates zero-overhead
-  Worker-to-Worker calls.
+  via Service Binding RPC + a consumer Worker.
 - GitHub Actions CI: typecheck/test on Node 20 & 22, Rust WASM build
   on stable with SIMD, non-blocking bench summary job.
+- `scripts/build-wasm.sh` now runs `wasm-opt -O3` with SIMD +
+  bulk-memory feature flags.
 
 ### Changed
+- **WASM Wu quantizer: packed-moment layout + wasm-opt.** 5 cumulative
+  moment tables collapsed into one `Vec<f64>` with stride 5; `volume5`
+  fuses 5 previous calls into 1 eight-corner pass. Cuts loads from 40 to
+  8 inside `variance()`. Paired with `wasm-opt -O3 --enable-simd`.
+  Net: 7% faster mean, 9% better p99 vs v0.2 initial.
 - `@paleta/core`: `PaletteOptions.crossColoCache` accepts any
   `PaletteCacheBackend` (`{ get, put }`); promoted from `cache` API only.
 - Pipeline now does two-tier cache lookup (colo-local → cross-colo) and

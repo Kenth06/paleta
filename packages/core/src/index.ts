@@ -6,6 +6,7 @@
  */
 
 export { getPalette, getColor } from "./pipeline.js";
+export { decodeJpegDcOnly } from "./decode/jpeg_dc.js";
 export { pickAccent, type AccentOptions, type AccentResult } from "./accent.js";
 export { sniffFormat, sniffFormatFromResponse } from "./sniff.js";
 export {

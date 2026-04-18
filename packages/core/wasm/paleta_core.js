@@ -16,6 +16,28 @@ export function build_histogram_total(rgba, width, height, step, alpha_threshold
 }
 
 /**
+ * Small wrapper so the WASM ABI stays narrow: flat bytes + dimensions, or
+ * an empty vec on failure. Caller treats zero-length as "unsupported".
+ * @param {Uint8Array} bytes
+ * @returns {Uint8Array}
+ */
+export function dc_only_decode_jpeg(bytes) {
+    try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.dc_only_decode_jpeg(retptr, ptr0, len0);
+        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+        var v2 = getArrayU8FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_export2(r0, r1 * 1, 1);
+        return v2;
+    } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+}
+
+/**
  * Quantize an RGBA buffer to `count` colors.
  *
  * Returns a flat `Uint8Array`-friendly layout:

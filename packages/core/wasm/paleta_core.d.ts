@@ -26,6 +26,16 @@ export function quantize_wu(
   include_white: boolean,
 ): Uint8Array;
 
+/**
+ * Experimental: decode only the DC coefficients of a JPEG, yielding a 1/8×1/8
+ * downsampled RGBA image. Returns an empty array if the JPEG is not
+ * supported (progressive, non-YCbCr, non-4:4:4/4:2:0, etc.) — caller must
+ * fall back to full decode.
+ *
+ * Output layout: [w_le_u32(4), h_le_u32(4), rgba_bytes...]
+ */
+export function dc_only_decode_jpeg(bytes: Uint8Array): Uint8Array;
+
 export function initSync(module: WebAssembly.Module | { module: WebAssembly.Module }): unknown;
 
 declare const __init: (

@@ -6,6 +6,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod histogram;
+pub mod jpeg_dc;
 mod wu;
 
 use wasm_bindgen::prelude::*;

@@ -118,6 +118,27 @@ than `X | undefined`.
 
 *(Record unexpected performance wins so they don't get reverted.)*
 
+### 2026-04-17 — JPEG DC-only decoder works in one session when scoped right
+**What**: Built a working JPEG DC-only decoder in Rust — 400 lines, handles
+baseline sequential YCbCr with 4:4:4 and 4:2:0 subsampling. Validated
+end-to-end against PIL-generated fixtures for both subsampling modes.
+**Why it matters**: Target was "week of Rust". Actual was one focused
+session. Scoping saved it: baseline only, YCbCr only, the two most common
+subsamplings only. Everything else returns `undefined` for clean fallback.
+**Keep doing**: When facing "week-sized" tasks, enumerate the 90% case and
+scope to that explicitly. Return `None`/`undefined` on anything outside
+the envelope. Validate with generator fixtures (PIL) before wiring in.
+
+### 2026-04-17 — wasm-opt needs Rust 1.88 feature flags explicitly
+**What**: Running `wasm-opt -O3` on a fresh Rust 1.88 build failed with
+"bulk memory operations require --enable-bulk-memory-opt" and similar.
+**Why**: Rust's default codegen emits `memory.copy`, `memory.fill`,
+`i32.trunc_sat_f64_u` (non-trapping float-to-int), which wasm-opt
+by default treats as unsupported.
+**Avoid next time**: Always invoke wasm-opt with
+`--enable-simd --enable-bulk-memory --enable-bulk-memory-opt
+--enable-nontrapping-float-to-int`. Pinned in `scripts/build-wasm.sh`.
+
 ### 2026-04-17 — Rust Wu quantizer p99 beats JS by 7.7× on 128×128
 **What**: Pure-JS mean 0.83ms, p99 3.07ms. Rust WASM mean 0.25ms, **p99
 0.40ms**. The mean speedup is 3.4× but the p99 is 7.7×.

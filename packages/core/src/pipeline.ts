@@ -16,6 +16,7 @@
  */
 
 import { hashKey, readCachedPalette, writeCachedPalette } from "./cache.js";
+import { decodeJpegDcOnly } from "./decode/jpeg_dc.js";
 import { normalizeInput, type NormalizedInput } from "./input.js";
 import {
   buildHistogram,
@@ -205,16 +206,40 @@ export async function getPalette(
   }
 
   const tDecode = now();
-  let decoded = await decodeBytes(format, decodeBytesSource, decoder);
+  let decoded: Awaited<ReturnType<typeof decodeBytes>> | undefined;
 
-  // If the thumbnail is too small to be useful, fall back to full decode.
+  // DC-only fast path: only for JPEGs, only when explicitly enabled, only
+  // when we haven't already picked EXIF-thumb. DC-only is ~50× faster than
+  // full decode but yields a 1/8×1/8 image.
   if (
-    pipelinePath === "exif-thumb" &&
-    Math.min(decoded.width, decoded.height) <
-      (opts.minThumbnailDimension ?? DEFAULTS.minThumbnailDimension)
+    pipelinePath === "full-decode" &&
+    format === "jpeg" &&
+    opts.useDcOnlyJpeg
   ) {
-    decoded = await decodeBytes(format, norm.bytes, decoder);
-    pipelinePath = "full-decode";
+    try {
+      const dc = await decodeJpegDcOnly(norm.bytes);
+      if (dc && dc.width >= 4 && dc.height >= 4) {
+        decoded = dc;
+        pipelinePath = "dc-only";
+      }
+    } catch {
+      // WASM not initialized or decoder threw — silently fall back.
+    }
+  }
+
+  if (!decoded) {
+    decoded = await decodeBytes(format, decodeBytesSource, decoder);
+
+    // If the EXIF thumbnail decoded to something too small to be useful,
+    // fall back to full decode.
+    if (
+      pipelinePath === "exif-thumb" &&
+      Math.min(decoded.width, decoded.height) <
+        (opts.minThumbnailDimension ?? DEFAULTS.minThumbnailDimension)
+    ) {
+      decoded = await decodeBytes(format, norm.bytes, decoder);
+      pipelinePath = "full-decode";
+    }
   }
   const decodeMs = now() - tDecode;
 

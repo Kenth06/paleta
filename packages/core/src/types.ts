@@ -91,6 +91,13 @@ export interface PaletteOptions {
    * Default 64. Set to 0 to always use the thumbnail when present.
    */
   minThumbnailDimension?: number;
+  /**
+   * Experimental: for JPEG input, try the Rust DC-only decoder first. On
+   * success we get a 1/8×1/8 downsampled image for ~1/64 the decode cost.
+   * Requires `initWasm()` to have been called. Falls back to full decode on
+   * anything unsupported. Default false.
+   */
+  useDcOnlyJpeg?: boolean;
 }
 
 export interface PaletteMeta {

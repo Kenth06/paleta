@@ -17,7 +17,7 @@ export function build_histogram_total(rgba, width, height, step, alpha_threshold
 
 /**
  * Small wrapper so the WASM ABI stays narrow: flat bytes + dimensions, or
- * an empty vec on failure. Caller treats zero-length as "unsupported".
+ * an empty vec on failure.
  * @param {Uint8Array} bytes
  * @returns {Uint8Array}
  */

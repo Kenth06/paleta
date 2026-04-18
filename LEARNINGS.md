@@ -41,6 +41,21 @@ Persistent notebook across Claude sessions. Append-only. Read before starting wo
 
 *(Record here when you get something wrong. Include date, what, why, and how to avoid.)*
 
+### 2026-04-17 — RPC Service entrypoint must extend WorkerEntrypoint (not default export)
+**What**: Tried to expose RPC methods via `export default { fetch, palette }`.
+Wrangler complained that Service Bindings with `entrypoint = "PaletaService"`
+can only target `WorkerEntrypoint` subclasses.
+**Why**: Cloudflare's Service Bindings RPC model (2025+) requires classes
+deriving from `cloudflare:workers#WorkerEntrypoint`. Plain object exports
+only expose `fetch`; they can't participate in typed RPC.
+**Avoid next time**: For RPC services, always:
+```ts
+import { WorkerEntrypoint } from "cloudflare:workers";
+export default class MyService extends WorkerEntrypoint<Env> { … }
+```
+Consumer binds with `entrypoint = "MyService"` in wrangler.jsonc and types
+via `Service<MyService>`.
+
 ### 2026-04-17 — Worker packages must drop DOM lib for `caches.default` typing
 **What**: Worker `tsconfig` inherited `lib: ["DOM", "DOM.Iterable"]` from the
 base. That pulls in DOM's `CacheStorage` type, which has `match()` / `open()`

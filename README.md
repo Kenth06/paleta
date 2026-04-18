@@ -83,8 +83,15 @@ Slower but portable to any runtime; also avoids the 27KB WASM payload.
 | `@paleta/core` | Pure-TS kernel: types, sniffer, Wu quantizer, OKLab, cache pipeline |
 | `@paleta/jsquash` | jSquash adapters (JPEG/PNG/WebP/AVIF) with lazy WASM init |
 | `@paleta/exif` | EXIF APP1 thumbnail extractor (fast path for JPEG) |
-| `@paleta/worker` | Deployable `/palette?url=...` Worker |
-| `paleta-core` (Rust) | v0.2 SIMD-accelerated WASM quantizer — scaffold only |
+| `@paleta/cache-do` | Durable Object SQLite cross-colo cache backend |
+| `paleta-core` (Rust) | SIMD-accelerated WASM Wu quantizer (`@paleta/core/wasm`) |
+
+## Examples
+
+| Example | Shows |
+|---|---|
+| `examples/minimal-worker` | `/palette?url=…` endpoint, WASM, caches.default, optional DO |
+| `examples/rpc-service` | Worker-to-Worker via Service Bindings (zero-overhead RPC) |
 
 ## Roadmap
 

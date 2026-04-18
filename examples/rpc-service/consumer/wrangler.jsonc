@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "paleta-consumer",
+  "main": "consumer/consumer.ts",
+  "compatibility_date": "2026-03-01",
+  "observability": { "enabled": true },
+  "services": [
+    { "binding": "PALETA", "service": "paleta-service", "entrypoint": "PaletaService" }
+  ]
+}

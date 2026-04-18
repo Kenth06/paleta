@@ -67,6 +67,37 @@ importers:
         specifier: ^3.88.0
         version: 3.114.17(@cloudflare/workers-types@4.20260417.1)
 
+  examples/rpc-service:
+    dependencies:
+      '@jsquash/avif':
+        specifier: ^2.1.0
+        version: 2.1.1
+      '@jsquash/jpeg':
+        specifier: ^1.6.0
+        version: 1.6.0
+      '@jsquash/png':
+        specifier: ^3.1.0
+        version: 3.1.1
+      '@jsquash/webp':
+        specifier: ^1.5.0
+        version: 1.5.0
+      '@paleta/cache-do':
+        specifier: workspace:*
+        version: link:../../packages/cache-do
+      '@paleta/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@paleta/jsquash':
+        specifier: workspace:*
+        version: link:../../packages/jsquash
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250628.0
+        version: 4.20260417.1
+      wrangler:
+        specifier: ^3.88.0
+        version: 3.114.17(@cloudflare/workers-types@4.20260417.1)
+
   packages/cache-do:
     dependencies:
       '@paleta/core':

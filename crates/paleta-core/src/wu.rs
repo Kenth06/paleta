@@ -1,13 +1,17 @@
-//! Wu's color quantization algorithm, Rust port.
+//! Wu's color quantization algorithm, Rust port with packed moment layout.
 //!
 //! Parallel to `packages/core/src/quantize/wu.ts` — same math, same correctness
-//! contract. The Rust version wins by not going through the V8 object-hash
-//! heap for `Box` and by letting LLVM inline the inner volume() helpers.
+//! contract. This version stores the 5 cumulative moments (count, sumR, sumG,
+//! sumB, sumSq) packed into a single `Vec<f64>` with stride 5, so a single
+//! `volume5` pass across 8 cube corners retrieves all 5 moments in one go
+//! instead of calling the scalar volume() 5 times (5× load reduction on the
+//! hot path inside cut/maximize).
 
 use crate::{histogram::Histogram, HIST_SIDE, HIST_STRIDE};
 
 const SIDE: usize = (HIST_SIDE as usize) + 1;
 const TABLE: usize = SIDE * SIDE * SIDE;
+const M: usize = 5; // moments per bucket
 
 #[derive(Clone, Copy, Default)]
 struct Box3 {
@@ -25,96 +29,100 @@ fn idx(r: usize, g: usize, b: usize) -> usize {
     (r * SIDE + g) * SIDE + b
 }
 
+/// Packed cumulative tables: 5 moments per bucket, stored contiguously.
+/// `tables[idx(r,g,b)*M + k]` = k-th cumulative moment at (r,g,b).
 struct Tables {
-    wt: Vec<f64>,
-    mr: Vec<f64>,
-    mg: Vec<f64>,
-    mb: Vec<f64>,
-    m2: Vec<f64>,
+    t: Vec<f64>,
 }
 
 fn build_cumulative(hist: &Histogram) -> Tables {
-    let mut wt = vec![0.0; TABLE];
-    let mut mr = vec![0.0; TABLE];
-    let mut mg = vec![0.0; TABLE];
-    let mut mb = vec![0.0; TABLE];
-    let mut m2 = vec![0.0; TABLE];
+    let mut t = vec![0.0f64; TABLE * M];
 
-    // Copy raw histogram into the r>=1 / g>=1 / b>=1 region.
+    // 1) Copy raw histogram into the r>=1 / g>=1 / b>=1 region.
     for r in 1..=(HIST_SIDE as usize) {
         for g in 1..=(HIST_SIDE as usize) {
             for b in 1..=(HIST_SIDE as usize) {
                 let h = ((((r - 1) << 10) | ((g - 1) << 5) | (b - 1)) * HIST_STRIDE) as usize;
-                let c = idx(r, g, b);
-                wt[c] = hist.moments[h];
-                mr[c] = hist.moments[h + 1];
-                mg[c] = hist.moments[h + 2];
-                mb[c] = hist.moments[h + 3];
-                m2[c] = hist.moments[h + 4];
+                let c = idx(r, g, b) * M;
+                t[c] = hist.moments[h];
+                t[c + 1] = hist.moments[h + 1];
+                t[c + 2] = hist.moments[h + 2];
+                t[c + 3] = hist.moments[h + 3];
+                t[c + 4] = hist.moments[h + 4];
             }
         }
     }
 
-    // 3D prefix sum (b, then g, then r).
+    // 2) 3D prefix sum (b, then g, then r). One pass updates all 5 moments
+    //    at each position in lockstep — LLVM will emit SIMD adds since the
+    //    data is flat and contiguous.
     for r in 1..=(HIST_SIDE as usize) {
-        let mut area_wt = [0f64; SIDE];
-        let mut area_mr = [0f64; SIDE];
-        let mut area_mg = [0f64; SIDE];
-        let mut area_mb = [0f64; SIDE];
-        let mut area_m2 = [0f64; SIDE];
-
+        let mut area = vec![0.0f64; SIDE * M];
         for g in 1..=(HIST_SIDE as usize) {
-            let mut line_wt = 0.0;
-            let mut line_mr = 0.0;
-            let mut line_mg = 0.0;
-            let mut line_mb = 0.0;
-            let mut line_m2 = 0.0;
+            let mut line = [0.0f64; M];
             for b in 1..=(HIST_SIDE as usize) {
-                let i = idx(r, g, b);
-                line_wt += wt[i];
-                line_mr += mr[i];
-                line_mg += mg[i];
-                line_mb += mb[i];
-                line_m2 += m2[i];
-                area_wt[b] += line_wt;
-                area_mr[b] += line_mr;
-                area_mg[b] += line_mg;
-                area_mb[b] += line_mb;
-                area_m2[b] += line_m2;
-                let prev = idx(r - 1, g, b);
-                wt[i] = wt[prev] + area_wt[b];
-                mr[i] = mr[prev] + area_mr[b];
-                mg[i] = mg[prev] + area_mg[b];
-                mb[i] = mb[prev] + area_mb[b];
-                m2[i] = m2[prev] + area_m2[b];
+                let i = idx(r, g, b) * M;
+                for k in 0..M {
+                    line[k] += t[i + k];
+                    area[b * M + k] += line[k];
+                }
+                let prev = idx(r - 1, g, b) * M;
+                for k in 0..M {
+                    t[i + k] = t[prev + k] + area[b * M + k];
+                }
             }
         }
     }
 
-    Tables { wt, mr, mg, mb, m2 }
+    Tables { t }
+}
+
+/// Single-moment volume — rarely used; `volume5` is the hot path.
+#[inline(always)]
+fn volume1(t: &[f64], k: usize, bx: &Box3) -> f64 {
+    let step = M;
+    t[idx(bx.r1, bx.g1, bx.b1) * step + k]
+        - t[idx(bx.r1, bx.g1, bx.b0) * step + k]
+        - t[idx(bx.r1, bx.g0, bx.b1) * step + k]
+        + t[idx(bx.r1, bx.g0, bx.b0) * step + k]
+        - t[idx(bx.r0, bx.g1, bx.b1) * step + k]
+        + t[idx(bx.r0, bx.g1, bx.b0) * step + k]
+        + t[idx(bx.r0, bx.g0, bx.b1) * step + k]
+        - t[idx(bx.r0, bx.g0, bx.b0) * step + k]
+}
+
+/// All-5-moment volume in a single pass.
+/// Loads 8 corners × 5 moments with packed memory access; LLVM can keep the
+/// 5 accumulators in SIMD lanes on the +simd128 target.
+#[inline(always)]
+fn volume5(t: &[f64], bx: &Box3) -> [f64; M] {
+    let i0 = idx(bx.r1, bx.g1, bx.b1) * M;
+    let i1 = idx(bx.r1, bx.g1, bx.b0) * M;
+    let i2 = idx(bx.r1, bx.g0, bx.b1) * M;
+    let i3 = idx(bx.r1, bx.g0, bx.b0) * M;
+    let i4 = idx(bx.r0, bx.g1, bx.b1) * M;
+    let i5 = idx(bx.r0, bx.g1, bx.b0) * M;
+    let i6 = idx(bx.r0, bx.g0, bx.b1) * M;
+    let i7 = idx(bx.r0, bx.g0, bx.b0) * M;
+    let mut out = [0.0f64; M];
+    for k in 0..M {
+        out[k] = t[i0 + k] - t[i1 + k] - t[i2 + k] + t[i3 + k]
+            - t[i4 + k] + t[i5 + k] + t[i6 + k] - t[i7 + k];
+    }
+    out
 }
 
 #[inline(always)]
-fn volume(t: &[f64], bx: &Box3) -> f64 {
-    t[idx(bx.r1, bx.g1, bx.b1)]
-        - t[idx(bx.r1, bx.g1, bx.b0)]
-        - t[idx(bx.r1, bx.g0, bx.b1)]
-        + t[idx(bx.r1, bx.g0, bx.b0)]
-        - t[idx(bx.r0, bx.g1, bx.b1)]
-        + t[idx(bx.r0, bx.g1, bx.b0)]
-        + t[idx(bx.r0, bx.g0, bx.b1)]
-        - t[idx(bx.r0, bx.g0, bx.b0)]
-}
-
 fn variance(t: &Tables, bx: &Box3) -> f64 {
-    let w = volume(&t.wt, bx);
+    let m = volume5(&t.t, bx);
+    let w = m[0];
     if w == 0.0 {
         return 0.0;
     }
-    let r = volume(&t.mr, bx);
-    let g = volume(&t.mg, bx);
-    let b = volume(&t.mb, bx);
-    let sq = volume(&t.m2, bx);
+    let r = m[1];
+    let g = m[2];
+    let b = m[3];
+    let sq = m[4];
     sq - (r * r + g * g + b * b) / w
 }
 
@@ -125,76 +133,71 @@ enum Axis {
     B,
 }
 
-struct Moment {
-    w: f64,
-    r: f64,
-    g: f64,
-    b: f64,
-    sq: f64,
+#[derive(Clone, Copy)]
+struct Moment5 {
+    m: [f64; M],
 }
 
-fn bottom(t: &Tables, axis: Axis, bx: &Box3) -> Moment {
-    let f = |a: &[f64]| -> f64 {
-        match axis {
-            Axis::R => {
-                -a[idx(bx.r0, bx.g1, bx.b1)]
-                    + a[idx(bx.r0, bx.g1, bx.b0)]
-                    + a[idx(bx.r0, bx.g0, bx.b1)]
-                    - a[idx(bx.r0, bx.g0, bx.b0)]
-            }
-            Axis::G => {
-                -a[idx(bx.r1, bx.g0, bx.b1)]
-                    + a[idx(bx.r1, bx.g0, bx.b0)]
-                    + a[idx(bx.r0, bx.g0, bx.b1)]
-                    - a[idx(bx.r0, bx.g0, bx.b0)]
-            }
-            Axis::B => {
-                -a[idx(bx.r1, bx.g1, bx.b0)]
-                    + a[idx(bx.r1, bx.g0, bx.b0)]
-                    + a[idx(bx.r0, bx.g1, bx.b0)]
-                    - a[idx(bx.r0, bx.g0, bx.b0)]
-            }
+/// Bottom slab for the box along `axis`. Returns all 5 moments fused.
+#[inline(always)]
+fn bottom5(t: &[f64], axis: Axis, bx: &Box3) -> Moment5 {
+    let (i0, i1, i2, i3): (usize, usize, usize, usize);
+    match axis {
+        Axis::R => {
+            i0 = idx(bx.r0, bx.g1, bx.b1) * M;
+            i1 = idx(bx.r0, bx.g1, bx.b0) * M;
+            i2 = idx(bx.r0, bx.g0, bx.b1) * M;
+            i3 = idx(bx.r0, bx.g0, bx.b0) * M;
         }
-    };
-    Moment {
-        w: f(&t.wt),
-        r: f(&t.mr),
-        g: f(&t.mg),
-        b: f(&t.mb),
-        sq: f(&t.m2),
+        Axis::G => {
+            i0 = idx(bx.r1, bx.g0, bx.b1) * M;
+            i1 = idx(bx.r1, bx.g0, bx.b0) * M;
+            i2 = idx(bx.r0, bx.g0, bx.b1) * M;
+            i3 = idx(bx.r0, bx.g0, bx.b0) * M;
+        }
+        Axis::B => {
+            i0 = idx(bx.r1, bx.g1, bx.b0) * M;
+            i1 = idx(bx.r1, bx.g0, bx.b0) * M;
+            i2 = idx(bx.r0, bx.g1, bx.b0) * M;
+            i3 = idx(bx.r0, bx.g0, bx.b0) * M;
+        }
     }
+    let mut out = [0.0f64; M];
+    for k in 0..M {
+        out[k] = -t[i0 + k] + t[i1 + k] + t[i2 + k] - t[i3 + k];
+    }
+    Moment5 { m: out }
 }
 
-fn top(t: &Tables, axis: Axis, pos: usize, bx: &Box3) -> Moment {
-    let f = |a: &[f64]| -> f64 {
-        match axis {
-            Axis::R => {
-                a[idx(pos, bx.g1, bx.b1)]
-                    - a[idx(pos, bx.g1, bx.b0)]
-                    - a[idx(pos, bx.g0, bx.b1)]
-                    + a[idx(pos, bx.g0, bx.b0)]
-            }
-            Axis::G => {
-                a[idx(bx.r1, pos, bx.b1)]
-                    - a[idx(bx.r1, pos, bx.b0)]
-                    - a[idx(bx.r0, pos, bx.b1)]
-                    + a[idx(bx.r0, pos, bx.b0)]
-            }
-            Axis::B => {
-                a[idx(bx.r1, bx.g1, pos)]
-                    - a[idx(bx.r1, bx.g0, pos)]
-                    - a[idx(bx.r0, bx.g1, pos)]
-                    + a[idx(bx.r0, bx.g0, pos)]
-            }
+/// Top slab at position `pos` along `axis`. Returns all 5 moments fused.
+#[inline(always)]
+fn top5(t: &[f64], axis: Axis, pos: usize, bx: &Box3) -> Moment5 {
+    let (i0, i1, i2, i3): (usize, usize, usize, usize);
+    match axis {
+        Axis::R => {
+            i0 = idx(pos, bx.g1, bx.b1) * M;
+            i1 = idx(pos, bx.g1, bx.b0) * M;
+            i2 = idx(pos, bx.g0, bx.b1) * M;
+            i3 = idx(pos, bx.g0, bx.b0) * M;
         }
-    };
-    Moment {
-        w: f(&t.wt),
-        r: f(&t.mr),
-        g: f(&t.mg),
-        b: f(&t.mb),
-        sq: f(&t.m2),
+        Axis::G => {
+            i0 = idx(bx.r1, pos, bx.b1) * M;
+            i1 = idx(bx.r1, pos, bx.b0) * M;
+            i2 = idx(bx.r0, pos, bx.b1) * M;
+            i3 = idx(bx.r0, pos, bx.b0) * M;
+        }
+        Axis::B => {
+            i0 = idx(bx.r1, bx.g1, pos) * M;
+            i1 = idx(bx.r1, bx.g0, pos) * M;
+            i2 = idx(bx.r0, bx.g1, pos) * M;
+            i3 = idx(bx.r0, bx.g0, pos) * M;
+        }
     }
+    let mut out = [0.0f64; M];
+    for k in 0..M {
+        out[k] = t[i0 + k] - t[i1 + k] - t[i2 + k] + t[i3 + k];
+    }
+    Moment5 { m: out }
 }
 
 fn maximize(
@@ -203,27 +206,27 @@ fn maximize(
     axis: Axis,
     from: usize,
     to: usize,
-    whole: Moment,
+    whole: Moment5,
 ) -> (f64, isize) {
-    let base = bottom(t, axis, bx);
+    let base = bottom5(&t.t, axis, bx);
     let mut max = 0.0;
     let mut cut: isize = -1;
     for i in from..to {
-        let half = top(t, axis, i, bx);
-        let w1 = base.w + half.w;
+        let half = top5(&t.t, axis, i, bx);
+        let w1 = base.m[0] + half.m[0];
         if w1 == 0.0 {
             continue;
         }
-        let r1 = base.r + half.r;
-        let g1 = base.g + half.g;
-        let b1 = base.b + half.b;
-        let w2 = whole.w - w1;
+        let r1 = base.m[1] + half.m[1];
+        let g1 = base.m[2] + half.m[2];
+        let b1 = base.m[3] + half.m[3];
+        let w2 = whole.m[0] - w1;
         if w2 == 0.0 {
             continue;
         }
-        let r2 = whole.r - r1;
-        let g2 = whole.g - g1;
-        let b2 = whole.b - b1;
+        let r2 = whole.m[1] - r1;
+        let g2 = whole.m[2] - g1;
+        let b2 = whole.m[3] - b1;
         let temp =
             (r1 * r1 + g1 * g1 + b1 * b1) / w1 + (r2 * r2 + g2 * g2 + b2 * b2) / w2;
         if temp > max {
@@ -235,31 +238,11 @@ fn maximize(
 }
 
 fn cut(t: &Tables, s1: &mut Box3, s2: &mut Box3) -> bool {
-    let whole = Moment {
-        w: volume(&t.wt, s1),
-        r: volume(&t.mr, s1),
-        g: volume(&t.mg, s1),
-        b: volume(&t.mb, s1),
-        sq: 0.0,
-    };
-    let whole_copy = Moment { ..whole };
+    let whole_arr = volume5(&t.t, s1);
+    let whole = Moment5 { m: whole_arr };
     let (mr, cr) = maximize(t, s1, Axis::R, s1.r0 + 1, s1.r1, whole);
-    let (mg, cg) = maximize(
-        t,
-        s1,
-        Axis::G,
-        s1.g0 + 1,
-        s1.g1,
-        Moment { ..whole_copy },
-    );
-    let (mb, cb) = maximize(
-        t,
-        s1,
-        Axis::B,
-        s1.b0 + 1,
-        s1.b1,
-        Moment { ..whole_copy },
-    );
+    let (mg, cg) = maximize(t, s1, Axis::G, s1.g0 + 1, s1.g1, whole);
+    let (mb, cb) = maximize(t, s1, Axis::B, s1.b0 + 1, s1.b1, whole);
 
     let (axis, cut_pos) = if mr >= mg && mr >= mb {
         if cr < 0 {
@@ -302,19 +285,6 @@ fn cut(t: &Tables, s1: &mut Box3, s2: &mut Box3) -> bool {
     true
 }
 
-// `whole` is consumed by `maximize`, so we implement Clone via struct-update.
-impl Clone for Moment {
-    fn clone(&self) -> Moment {
-        Moment {
-            w: self.w,
-            r: self.r,
-            g: self.g,
-            b: self.b,
-            sq: self.sq,
-        }
-    }
-}
-
 pub struct WuResult {
     pub palette: Vec<[u8; 3]>,
     pub populations: Vec<f64>,
@@ -341,7 +311,6 @@ pub fn quantize(hist: &Histogram, count: usize) -> WuResult {
     let mut i = 1usize;
     let mut active_count = count;
     while i < active_count {
-        // Split boxes[next] into boxes[next] and boxes[i].
         let (left, right) = boxes.split_at_mut(i);
         let s1 = &mut left[next];
         let s2 = &mut right[0];
@@ -350,7 +319,6 @@ pub fn quantize(hist: &Histogram, count: usize) -> WuResult {
             vv[i] = if s2.vol > 1 { variance(&tables, s2) } else { 0.0 };
         } else {
             vv[next] = 0.0;
-            // Retry this slot.
             next = 0;
             let mut max = vv[0];
             for k in 1..=i {
@@ -386,13 +354,13 @@ pub fn quantize(hist: &Histogram, count: usize) -> WuResult {
     let mut palette: Vec<[u8; 3]> = Vec::with_capacity(boxes.len());
     let mut populations: Vec<f64> = Vec::with_capacity(boxes.len());
     for bx in boxes.iter() {
-        let w = volume(&tables.wt, bx);
+        let w = volume1(&tables.t, 0, bx);
         if w <= 0.0 {
             continue;
         }
-        let r = (volume(&tables.mr, bx) / w).round().clamp(0.0, 255.0) as u8;
-        let g = (volume(&tables.mg, bx) / w).round().clamp(0.0, 255.0) as u8;
-        let b = (volume(&tables.mb, bx) / w).round().clamp(0.0, 255.0) as u8;
+        let r = (volume1(&tables.t, 1, bx) / w).round().clamp(0.0, 255.0) as u8;
+        let g = (volume1(&tables.t, 2, bx) / w).round().clamp(0.0, 255.0) as u8;
+        let b = (volume1(&tables.t, 3, bx) / w).round().clamp(0.0, 255.0) as u8;
         palette.push([r, g, b]);
         populations.push(w);
     }

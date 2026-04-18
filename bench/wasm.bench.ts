@@ -8,6 +8,15 @@ import {
   quantizeWuWasm,
 } from "@paleta/core";
 
+// Dynamically import the bindgen module to call build_histogram_total,
+// which isn't re-exported from @paleta/core but is useful for measuring
+// the pure histogram cost.
+const bindgen = (await import("../packages/core/wasm/paleta_core.js")) as unknown as {
+  build_histogram_total: (
+    rgba: Uint8Array, w: number, h: number, step: number, alpha: number, white: boolean,
+  ) => number;
+};
+
 const WASM_PATH = fileURLToPath(
   new URL("../packages/core/wasm/paleta_core_bg.wasm", import.meta.url),
 );
@@ -16,6 +25,13 @@ const WASM_PATH = fileURLToPath(
 // so we init at module top level (ESM supports top-level await).
 const wasmBytes = await readFile(WASM_PATH);
 await initWasm(wasmBytes);
+// Independently init the bindgen module instance used by this file's direct
+// `bindgen.build_histogram_total` calls. ESM module caching means this is
+// the same singleton as the one @paleta/core uses, but we call `default`
+// again to be safe — a second init is a no-op in wasm-bindgen.
+await (bindgen as unknown as {
+  default: (input: unknown) => Promise<unknown>;
+}).default({ module_or_path: wasmBytes });
 
 function noisy(w: number, h: number, seed = 42): Uint8Array {
   const out = new Uint8Array(w * h * 4);
@@ -32,6 +48,18 @@ function noisy(w: number, h: number, seed = 42): Uint8Array {
 
 describe("128x128 noise — JS vs WASM", () => {
   const data = noisy(128, 128);
+
+  bench("JS: histogram only", () => {
+    buildHistogram(data, 128, 128, {
+      alphaThreshold: 125,
+      includeWhite: false,
+      step: 1,
+    });
+  });
+
+  bench("WASM: histogram only", () => {
+    bindgen.build_histogram_total(data, 128, 128, 1, 125, false);
+  });
 
   bench("JS: histogram + quantizeWu(10)", () => {
     const hist = buildHistogram(data, 128, 128, {

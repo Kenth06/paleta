@@ -22,9 +22,12 @@ import { autoDecoders } from "@paleta/jsquash";
 import { paletaDurableCache } from "@paleta/cache-do";
 
 // The wrangler CompiledWasm rule turns this into a WebAssembly.Module at
-// build time, giving us a cold-start-friendly zero-parse instantiation.
+// build time. Imported by explicit relative path because wrangler's
+// esbuild does not apply the CompiledWasm rule to package-subpath-export
+// resolutions — the rule matches on file extension and esbuild sees the
+// virtual subpath name before it resolves to the actual .wasm file.
 // @ts-expect-error — resolved by wrangler, not TS.
-import paletaWasm from "@paleta/core/wasm";
+import paletaWasm from "../../../packages/core/wasm/paleta_core_bg.wasm";
 
 // Re-export the DO class so wrangler can instantiate it. The class must be
 // at the Worker module level or Cloudflare can't wire it up.
@@ -119,6 +122,10 @@ export default {
         cache: caches.default,
         colorCount: Number.isFinite(colorCount) ? colorCount : 10,
         signal: request.signal,
+        // DC-only handles every common JPEG variant (baseline, progressive,
+        // grayscale, CMYK, all subsamplings) and is 4–12× faster than
+        // mozjpeg full decode, so we always try it first for JPEG input.
+        useDcOnlyJpeg: true,
       };
       if (env.PALETA_CACHE) {
         paletteOpts.crossColoCache = paletaDurableCache(env.PALETA_CACHE as never);

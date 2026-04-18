@@ -8,5 +8,13 @@
   "observability": { "enabled": true },
   "rules": [
     { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "PALETA_CACHE", "class_name": "PaletaCacheDO" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PaletaCacheDO"] }
   ]
 }

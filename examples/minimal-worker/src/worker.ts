@@ -19,14 +19,21 @@ import {
   type RGB,
 } from "@paleta/core";
 import { autoDecoders } from "@paleta/jsquash";
+import { paletaDurableCache } from "@paleta/cache-do";
 
 // The wrangler CompiledWasm rule turns this into a WebAssembly.Module at
 // build time, giving us a cold-start-friendly zero-parse instantiation.
 // @ts-expect-error — resolved by wrangler, not TS.
 import paletaWasm from "@paleta/core/wasm";
 
+// Re-export the DO class so wrangler can instantiate it. The class must be
+// at the Worker module level or Cloudflare can't wire it up.
+export { PaletaCacheDO } from "@paleta/cache-do";
+
 interface Env {
   ALLOWED_HOSTS?: string;
+  /** Durable Object namespace bound in wrangler.jsonc. Optional. */
+  PALETA_CACHE?: DurableObjectNamespace;
 }
 
 // Initialize WASM once per isolate. The first request pays the init cost
@@ -107,12 +114,16 @@ export default {
 
     try {
       await ensureWasm();
-      const result = await getPalette(targetUrl.toString(), {
+      const paletteOpts: Parameters<typeof getPalette>[1] = {
         decoders: autoDecoders(),
         cache: caches.default,
         colorCount: Number.isFinite(colorCount) ? colorCount : 10,
         signal: request.signal,
-      });
+      };
+      if (env.PALETA_CACHE) {
+        paletteOpts.crossColoCache = paletaDurableCache(env.PALETA_CACHE as never);
+      }
+      const result = await getPalette(targetUrl.toString(), paletteOpts);
 
       const body: Record<string, unknown> = { ...result };
       if (bgRgb) {

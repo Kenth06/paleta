@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@paleta/cache-do": "workspace:*",
     "@paleta/core": "workspace:*",
     "@paleta/jsquash": "workspace:*",
     "@jsquash/jpeg": "^1.6.0",

@@ -18,6 +18,8 @@
     "clean": "pnpm -r exec rm -rf dist .turbo node_modules/.cache"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250628.0",
+    "@paleta/cache-do": "workspace:*",
     "@paleta/core": "workspace:*",
     "@paleta/exif": "workspace:*",
     "@paleta/jsquash": "workspace:*",

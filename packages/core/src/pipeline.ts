@@ -144,7 +144,9 @@ export async function getPalette(
     );
   }
 
-  const cacheKey = opts.cache ? buildCacheKeyFromOptions(norm, opts) : undefined;
+  const cacheKey =
+    opts.cache || opts.crossColoCache ? buildCacheKeyFromOptions(norm, opts) : undefined;
+
   if (opts.cache && cacheKey) {
     const cached = await readCachedPalette(opts.cache, cacheKey);
     if (cached) {
@@ -152,6 +154,34 @@ export async function getPalette(
         ...cached,
         meta: { ...cached.meta, path: "cache-hit" as PipelinePath, totalMs: now() - tStart },
       };
+    }
+  }
+
+  if (opts.crossColoCache && cacheKey) {
+    try {
+      const cached = await opts.crossColoCache.get(cacheKey);
+      if (cached) {
+        // Promote to colo-local cache so neighbors benefit without a second
+        // cross-colo round trip.
+        if (opts.cache) {
+          await writeCachedPalette(
+            opts.cache,
+            cacheKey,
+            cached,
+            opts.cacheTTL ?? DEFAULTS.cacheTTL,
+          );
+        }
+        return {
+          ...cached,
+          meta: {
+            ...cached.meta,
+            path: "cache-hit" as PipelinePath,
+            totalMs: now() - tStart,
+          },
+        };
+      }
+    } catch {
+      // Cross-colo backends can be flaky; never block the request on them.
     }
   }
 
@@ -260,13 +290,15 @@ export async function getPalette(
     },
   };
 
-  if (opts.cache && cacheKey) {
-    await writeCachedPalette(
-      opts.cache,
-      cacheKey,
-      result,
-      opts.cacheTTL ?? DEFAULTS.cacheTTL,
-    );
+  if (cacheKey) {
+    const ttl = opts.cacheTTL ?? DEFAULTS.cacheTTL;
+    if (opts.cache) {
+      await writeCachedPalette(opts.cache, cacheKey, result, ttl);
+    }
+    if (opts.crossColoCache) {
+      // Fire-and-forget — don't block the response.
+      opts.crossColoCache.put(cacheKey, result, ttl).catch(() => void 0);
+    }
   }
 
   return result;

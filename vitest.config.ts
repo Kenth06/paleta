@@ -6,5 +6,9 @@ export default defineConfig({
     environment: "node",
     globals: false,
     reporters: ["default"],
+    alias: {
+      "cloudflare:workers": new URL("./test/stubs/cloudflare-workers.ts", import.meta.url)
+        .pathname,
+    },
   },
 });

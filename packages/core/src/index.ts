@@ -41,6 +41,7 @@ export {
   type ImageFormat,
   type ImageInput,
   type OKLCH,
+  type PaletteCacheBackend,
   type PaletteMeta,
   type PaletteOptions,
   type PaletteResult,

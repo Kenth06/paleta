@@ -60,6 +60,13 @@ export interface PaletteOptions {
   decoder?: DecodeFn;
   /** Optional Cache API instance (e.g. caches.default) for result caching. */
   cache?: Cache;
+  /**
+   * Cross-colo / persistent cache. Accepts any backend with a simple
+   * get/put contract: a Durable Object, a KV namespace wrapper, an R2
+   * wrapper, or your own. Queried after `cache` misses. On a hit, the
+   * value is promoted into `cache` for subsequent colo-local reuse.
+   */
+  crossColoCache?: PaletteCacheBackend;
   /** Seconds to cache the palette. Default 86400 (24h). */
   cacheTTL?: number;
   /** Abort signal for fetch + decode. */
@@ -105,6 +112,19 @@ export interface PaletteResult {
   /** Palette entries in OKLCH. Same order as `palette`. */
   oklch: OKLCH[];
   meta: PaletteMeta;
+}
+
+/**
+ * Minimal async cache contract. Implemented by @paleta/cache-do for a
+ * Durable Object SQLite backend, and easy to wrap KV/R2/Redis yourself.
+ *
+ * - `get(key)` resolves with a stored `PaletteResult` or `undefined` on miss.
+ * - `put(key, value, ttlSeconds)` stores with a TTL. Backends that don't
+ *   support TTL natively are expected to persist an expiry timestamp.
+ */
+export interface PaletteCacheBackend {
+  get(key: string): Promise<PaletteResult | undefined>;
+  put(key: string, value: PaletteResult, ttlSeconds: number): Promise<void>;
 }
 
 export class PaletteError extends Error {

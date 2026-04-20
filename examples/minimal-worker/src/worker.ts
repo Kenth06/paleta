@@ -20,6 +20,7 @@ import {
 } from "@paleta/core";
 import { autoDecoders } from "@paleta/jsquash";
 import { paletaDurableCache } from "@paleta/cache-do";
+import { benchFixtureBytes } from "./bench-fixture.js";
 import { init as initJpegCodec } from "@jsquash/jpeg/decode";
 import { init as initPngCodec } from "@jsquash/png/decode";
 import { init as initWebpCodec } from "@jsquash/webp/decode";
@@ -103,12 +104,72 @@ function allowedHost(host: string, env: Env): boolean {
   });
 }
 
+/**
+ * GET /bench?iters=200&path=dc|full
+ *
+ * Times N end-to-end palette extractions against an inlined 640×480 4:2:0
+ * JPEG fixture. Returns mean/p50/p95/p99 so we can compare DC-only vs
+ * full-decode from inside a real workerd isolate (no miniflare-wrangler-dev
+ * cold-start noise between iterations).
+ *
+ * Not cached — every iteration runs the full pipeline fresh. The first
+ * iteration of a cold isolate pays WASM-init; subsequent calls reuse.
+ */
+async function runBench(params: URLSearchParams): Promise<Response> {
+  await ensureWasm();
+
+  const iters = Math.max(1, Math.min(2000, Number.parseInt(params.get("iters") ?? "200", 10)));
+  const mode = (params.get("path") ?? "dc") === "full" ? "full" : "dc";
+
+  const fixture = benchFixtureBytes();
+  const runs: number[] = [];
+  // Warm-up — first invocation primes the WASM instance caches.
+  await getPalette(fixture, {
+    decoders: autoDecoders(),
+    colorCount: 8,
+    useDcOnlyJpeg: mode === "dc",
+  });
+
+  for (let i = 0; i < iters; i++) {
+    const t0 = performance.now();
+    await getPalette(fixture, {
+      decoders: autoDecoders(),
+      colorCount: 8,
+      useDcOnlyJpeg: mode === "dc",
+    });
+    runs.push(performance.now() - t0);
+  }
+
+  runs.sort((a, b) => a - b);
+  const pct = (p: number) => runs[Math.min(runs.length - 1, Math.floor(runs.length * p))]!;
+  const mean = runs.reduce((a, b) => a + b, 0) / runs.length;
+
+  return json({
+    fixture: { bytes: fixture.length, dims: "640x480", subsampling: "4:2:0" },
+    mode,
+    iters,
+    timings_ms: {
+      mean: +mean.toFixed(3),
+      min: +runs[0]!.toFixed(3),
+      p50: +pct(0.5).toFixed(3),
+      p95: +pct(0.95).toFixed(3),
+      p99: +pct(0.99).toFixed(3),
+      max: +runs[runs.length - 1]!.toFixed(3),
+    },
+    hz: +(1000 / mean).toFixed(1),
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/" || url.pathname === "/health") {
       return json({ ok: true, service: "paleta", version: "0.1.0-alpha.0" });
+    }
+
+    if (url.pathname === "/bench") {
+      return runBench(url.searchParams);
     }
 
     if (url.pathname !== "/palette") {

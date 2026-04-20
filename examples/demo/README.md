@@ -1,7 +1,13 @@
 # paleta — demo starter
 
 A deployable starter you can clone to your own Cloudflare account. One
-Worker, one React SPA, one palette endpoint.
+Worker, one React SPA, one `/api/palette` endpoint. Paste an image URL,
+get a palette.
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Kenth06/paleta/tree/main/examples/demo)
+
+![paleta demo empty state](./docs/screenshots/01-empty.png)
+![paleta demo with extracted palette](./docs/screenshots/02-result.png)
 
 - **Frontend:** Vite + React 19 + TypeScript + Tailwind v4 + Kumo
 - **Backend:** Cloudflare Worker (serves the SPA via the `[assets]` binding
@@ -20,6 +26,8 @@ Open <http://localhost:5173>. Vite proxies `/api/*` to the wrangler dev
 Worker on `:8787`, so the UI hits the real runtime.
 
 ## Deploy to your own Cloudflare account
+
+Click the **Deploy to Cloudflare** button above, or run it yourself:
 
 ```sh
 wrangler login           # first time only
@@ -43,27 +51,23 @@ Everything worth tweaking lives in `wrangler.jsonc`:
   `wrangler.jsonc` and the `export { PaletaCacheDO }` line in
   `src/worker.ts` to enable sub-millisecond cross-colo cache hits.
 
-## What the page shows
-
-- Dominant color card with HEX, RGB, and OKLCH (click to copy).
-- Click-to-copy swatches, sorted by OKLab dominance.
-- Pipeline panel — which fast path (`dc-only`, `cache-hit`, `exif-thumb`,
-  `full-decode`) fired, plus decode / quantize / total timings. `dc-only`
-  is highlighted because that's the library's killer feature.
-- The site accent (`--accent` CSS var) re-tints from the dominant color.
-
 ## API
 
 ```
 GET /api/palette?url=<image>&count=<n>&bg=<#hex>
 ```
 
-Returns the paleta result with two additions:
+Returns the paleta result with these additions:
 
 - `palette[].oklch` — CSS `oklch(...)` string per swatch.
 - `accents.onBlack` / `onWhite` — pre-computed WCAG picks for the two
   most common backgrounds, including contrast ratio and WCAG tier.
 - `accents.onCustom` — same, for a `bg=` query param.
+- `meta.path` — which fast path fired: `dc-only`, `cache-hit`,
+  `exif-thumb`, or `full-decode`.
+
+The UI renders only the palette swatches. Everything else is there for
+you to use if you want to extend the starter.
 
 ## Architecture
 

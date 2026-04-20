@@ -104,7 +104,7 @@ Slower but portable to any runtime; also avoids the 60 KB WASM payload.
 
 | Example | Shows |
 |---|---|
-| [`examples/demo`](./examples/demo) | Starter template — Vite + React SPA + Worker, deploy your own with `pnpm deploy` |
+| [`examples/demo`](./examples/demo) | Starter template — Vite + React SPA + Worker. [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Kenth06/paleta/tree/main/examples/demo) |
 | [`examples/minimal-worker`](./examples/minimal-worker) | `/palette?url=…` endpoint, WASM, caches.default, optional DO, `/bench` |
 | [`examples/rpc-service`](./examples/rpc-service) | Worker-to-Worker via Service Bindings (zero-overhead RPC) |
 

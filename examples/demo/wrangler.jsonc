@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "paleta-demo",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "placement": { "mode": "smart" },
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
+  ],
+  "vars": {
+    "ALLOWED_HOSTS": "images.unsplash.com,plus.unsplash.com,i.imgur.com,raw.githubusercontent.com,user-images.githubusercontent.com,cdn.jsdelivr.net,picsum.photos,fastly.picsum.photos,avatars.githubusercontent.com"
+  }
+  // Durable Object cross-colo cache — uncomment the two blocks below to enable.
+  // Adds a sub-millisecond hit on repeat URLs across colos. Free tier compatible.
+  //
+  // "durable_objects": {
+  //   "bindings": [
+  //     { "name": "PALETA_CACHE", "class_name": "PaletaCacheDO" }
+  //   ]
+  // },
+  // "migrations": [
+  //   { "tag": "v1", "new_sqlite_classes": ["PaletaCacheDO"] }
+  // ]
+}

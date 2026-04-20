@@ -1,0 +1,39 @@
+{
+  "name": "@ken0106/example-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "paleta live demo — Vite + React SPA served by a Cloudflare Worker.",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n vite,worker -c cyan,magenta \"vite\" \"wrangler dev --port 8787\"",
+    "build": "vite build",
+    "deploy": "vite build && wrangler deploy",
+    "typecheck": "tsc -b",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@cloudflare/kumo": "^1.19.0",
+    "@ken0106/cache-do": "workspace:*",
+    "@ken0106/core": "workspace:*",
+    "@ken0106/jsquash": "workspace:*",
+    "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/png": "^3.1.0",
+    "@jsquash/webp": "^1.5.0",
+    "@jsquash/avif": "^2.1.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250628.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0",
+    "wrangler": "^4.83.0"
+  }
+}

@@ -10,7 +10,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { decodeJpegDcOnly, initWasm } from "@paleta/core";
+import { decodeJpegDcOnly, initWasm } from "@ken0106/core";
 
 const WASM_PATH = fileURLToPath(
   new URL("../packages/core/wasm/paleta_core_bg.wasm", import.meta.url),

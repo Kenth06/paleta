@@ -9,7 +9,7 @@ _nothing yet — next tag will sit here._
 ## [0.1.0-alpha.0] — 2026-04-20
 
 First tagged release. Four packages published to the `alpha` dist-tag:
-`@paleta/core`, `@paleta/jsquash`, `@paleta/exif`, `@paleta/cache-do`.
+`@ken0106/core`, `@ken0106/jsquash`, `@ken0106/exif`, `@ken0106/cache-do`.
 
 ### Added
 - **JPEG DC-only decoder** (Rust, exposed as `decodeJpegDcOnly` +
@@ -49,7 +49,7 @@ First tagged release. Four packages published to the `alpha` dist-tag:
   and buffered u32 BitReader combine for an 11× speedup on the decoder
   hot path (3.68 ms → 0.33 ms on 640×480 4:2:0 JPEG). Final result is
   3–9× faster than `@jsquash/jpeg` (mozjpeg) across every tested size.
-- `@paleta/core`: `PaletteOptions.crossColoCache` accepts any
+- `@ken0106/core`: `PaletteOptions.crossColoCache` accepts any
   `PaletteCacheBackend` (`{ get, put }`); promoted from `cache` API only.
 - Pipeline now does two-tier cache lookup (colo-local → cross-colo) and
   back-fills colo-local on cross-colo hits.
@@ -78,11 +78,11 @@ End-to-end `getPalette()` inside a real Cloudflare `workerd` isolate
 ## [0.4.0-alpha] — 2026-04-17
 
 ### Added
-- **`@paleta/cache-do`**: Durable Object SQLite cache backend. Free-tier
+- **`@ken0106/cache-do`**: Durable Object SQLite cache backend. Free-tier
   compatible. `paletaDurableCache(namespace, shardKey?)` returns a
   `PaletteCacheBackend`. Self-managing expiry via DO alarms.
 - `PaletaCacheDO` class with `cacheGet`/`cachePut`/`cachePurge` RPC methods.
-- `PaletteCacheBackend` type exported from `@paleta/core`.
+- `PaletteCacheBackend` type exported from `@ken0106/core`.
 - Example Worker wires the DO cache behind an optional `PALETA_CACHE` binding.
 
 ## [0.3.0-alpha] — 2026-04-17
@@ -92,7 +92,7 @@ End-to-end `getPalette()` inside a real Cloudflare `workerd` isolate
   the input is JPEG, the pipeline decodes the EXIF thumbnail instead of the
   full image. `meta.path` reports `exif-thumb` or `full-decode`.
 - `PaletteOptions.thumbnailExtractor`, `minThumbnailDimension`.
-- `@paleta/core/wasm` subpath export — ship the prebuilt WASM with the package.
+- `@ken0106/core/wasm` subpath export — ship the prebuilt WASM with the package.
 - Example Worker uses `CompiledWasm` rule + lazy `initWasm` with auto-fallback.
 
 ### Deferred
@@ -116,14 +116,14 @@ End-to-end `getPalette()` inside a real Cloudflare `workerd` isolate
 ## [0.1.0-alpha] — 2026-04-17
 
 ### Added — pure-TS kernel
-- **`@paleta/core`**: correct magic-byte sniffer (fixes upstream AVIF +
+- **`@ken0106/core`**: correct magic-byte sniffer (fixes upstream AVIF +
   WebP bugs), Wu quantizer over a 5-bit RGB histogram, OKLab ↔ OKLCH
   conversions, WCAG 2.x contrast helpers, NN resize, perceptual palette
   sort, accent picker, `PaletteError`, edge-cache integration.
-- **`@paleta/jsquash`**: lazy per-format adapters (JPEG/PNG/WebP/AVIF).
+- **`@ken0106/jsquash`**: lazy per-format adapters (JPEG/PNG/WebP/AVIF).
   jSquash declared as optional peer dependencies so JPEG-only consumers
   ship ~200KB instead of 1.3MB.
-- **`@paleta/exif`**: standalone EXIF APP1 JPEG thumbnail extractor.
+- **`@ken0106/exif`**: standalone EXIF APP1 JPEG thumbnail extractor.
 - **`examples/minimal-worker`**: deployable `/palette?url=…` Worker with
   `caches.default`, Smart Placement, optional `ALLOWED_HOSTS` SSRF guard.
 - **`paleta-core` (Rust crate)**: scaffold for v0.2 with release profile,

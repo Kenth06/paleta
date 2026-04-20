@@ -8,5 +8,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   splitting: false,
-  external: ["cloudflare:workers", "@paleta/core"],
+  external: ["cloudflare:workers", "@ken0106/core"],
 });

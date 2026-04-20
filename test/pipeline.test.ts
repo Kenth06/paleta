@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPalette, type DecodeFn, type DecodedImage } from "@paleta/core";
+import { getPalette, type DecodeFn, type DecodedImage } from "@ken0106/core";
 
 /** Synthetic JPEG-looking bytes (just enough magic for the sniffer). */
 function jpegLikeBytes(): Uint8Array {

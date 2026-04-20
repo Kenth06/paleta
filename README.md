@@ -18,7 +18,7 @@ Fast, open-source color palette extraction for Cloudflare Workers (and any moder
 ## Install (once published)
 
 ```sh
-pnpm add @paleta/core @paleta/jsquash
+pnpm add @ken0106/core @ken0106/jsquash
 # optional peers:
 pnpm add @jsquash/jpeg @jsquash/png @jsquash/webp @jsquash/avif
 ```
@@ -28,10 +28,10 @@ pnpm add @jsquash/jpeg @jsquash/png @jsquash/webp @jsquash/avif
 ### On a Cloudflare Worker
 
 ```ts
-import { getPalette, initWasm } from "@paleta/core";
-import { autoDecoders } from "@paleta/jsquash";
+import { getPalette, initWasm } from "@ken0106/core";
+import { autoDecoders } from "@ken0106/jsquash";
 // wrangler.jsonc: [[rules]] type = "CompiledWasm", globs = ["**/*.wasm"]
-import paletaWasm from "@paleta/core/wasm";
+import paletaWasm from "@ken0106/core/wasm";
 
 let ready: Promise<void> | undefined;
 const ensureWasm = () => (ready ??= initWasm(paletaWasm as WebAssembly.Module));
@@ -53,12 +53,12 @@ export default {
 ### On Node / Bun / browsers
 
 ```ts
-import { getPalette, initWasm } from "@paleta/core";
-import { autoDecoders } from "@paleta/jsquash";
+import { getPalette, initWasm } from "@ken0106/core";
+import { autoDecoders } from "@ken0106/jsquash";
 import { readFile } from "node:fs/promises";
 
 await initWasm(await readFile(
-  new URL("@paleta/core/wasm", import.meta.url),
+  new URL("@ken0106/core/wasm", import.meta.url),
 ));
 
 const result = await getPalette("https://example.com/cat.jpg", {
@@ -80,11 +80,11 @@ Slower but portable to any runtime; also avoids the 27KB WASM payload.
 
 | Package | Purpose |
 |---|---|
-| `@paleta/core` | Pure-TS kernel: types, sniffer, Wu quantizer, OKLab, cache pipeline |
-| `@paleta/jsquash` | jSquash adapters (JPEG/PNG/WebP/AVIF) with lazy WASM init |
-| `@paleta/exif` | EXIF APP1 thumbnail extractor (fast path for JPEG) |
-| `@paleta/cache-do` | Durable Object SQLite cross-colo cache backend |
-| `paleta-core` (Rust) | SIMD-accelerated WASM Wu quantizer (`@paleta/core/wasm`) |
+| `@ken0106/core` | Pure-TS kernel: types, sniffer, Wu quantizer, OKLab, cache pipeline |
+| `@ken0106/jsquash` | jSquash adapters (JPEG/PNG/WebP/AVIF) with lazy WASM init |
+| `@ken0106/exif` | EXIF APP1 thumbnail extractor (fast path for JPEG) |
+| `@ken0106/cache-do` | Durable Object SQLite cross-colo cache backend |
+| `paleta-core` (Rust) | SIMD-accelerated WASM Wu quantizer (`@ken0106/core/wasm`) |
 
 ## Examples
 
@@ -98,7 +98,7 @@ Slower but portable to any runtime; also avoids the 27KB WASM payload.
 - [x] v0.1 — TS kernel, jSquash adapters, deployable Worker
 - [x] v0.2 — Rust+SIMD WASM quantizer (2.9× mean, ~10× p99 on 128×128)
 - [x] v0.3 — EXIF thumbnail fast path + JPEG DC-only decoder (4–12× faster than mozjpeg on real JPEGs; full baseline/progressive/grayscale/CMYK/4:2:2/4:2:0 coverage)
-- [x] v0.4 — Durable Object cross-colo palette cache (`@paleta/cache-do`)
+- [x] v0.4 — Durable Object cross-colo palette cache (`@ken0106/cache-do`)
 - [ ] v0.5 — Containers tier for HEIC/TIFF
 - [ ] v1.0 — stable
 

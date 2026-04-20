@@ -5,8 +5,8 @@ import {
   type DecodedImage,
   type PaletteCacheBackend,
   type PaletteResult,
-} from "@paleta/core";
-import { paletaDurableCache } from "@paleta/cache-do";
+} from "@ken0106/core";
+import { paletaDurableCache } from "@ken0106/cache-do";
 
 function jpegLikeBytes(): Uint8Array {
   return new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x00]);

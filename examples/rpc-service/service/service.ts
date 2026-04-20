@@ -17,13 +17,13 @@ import {
   type PaletteOptions,
   type PaletteResult,
   type RGB,
-} from "@paleta/core";
-import { autoDecoders } from "@paleta/jsquash";
-import { paletaDurableCache } from "@paleta/cache-do";
+} from "@ken0106/core";
+import { autoDecoders } from "@ken0106/jsquash";
+import { paletaDurableCache } from "@ken0106/cache-do";
 // @ts-expect-error — resolved by wrangler's CompiledWasm rule
-import paletaWasm from "@paleta/core/wasm";
+import paletaWasm from "@ken0106/core/wasm";
 
-export { PaletaCacheDO } from "@paleta/cache-do";
+export { PaletaCacheDO } from "@ken0106/cache-do";
 
 interface Env {
   PALETA_CACHE?: DurableObjectNamespace;

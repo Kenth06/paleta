@@ -1,5 +1,5 @@
 {
-  "name": "@paleta/cache-do",
+  "name": "@ken0106/cache-do",
   "version": "0.1.0-alpha.0",
   "description": "Durable Object SQLite cache backend for paleta. Free-tier compatible.",
   "type": "module",
@@ -20,7 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@paleta/core": "workspace:*"
+    "@ken0106/core": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250628.0"

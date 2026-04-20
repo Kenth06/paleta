@@ -1,12 +1,12 @@
 /**
- * @paleta/jsquash — decoder adapters.
+ * @ken0106/jsquash — decoder adapters.
  *
  * Each format is exposed as a named adapter and lazy-loads its jSquash module
  * on first call. The `autoDecoders()` helper returns a DecoderMap suitable for
  * passing straight into `getPalette({ decoders: ... })`.
  */
 
-import type { DecoderMap } from "@paleta/core";
+import type { DecoderMap } from "@ken0106/core";
 import { decodeAVIF } from "./avif.js";
 import { decodeJPEG } from "./jpeg.js";
 import { decodePNG } from "./png.js";

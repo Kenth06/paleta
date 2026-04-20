@@ -8,7 +8,7 @@
  */
 
 import { readFile, readdir } from "node:fs/promises";
-import { decodeJpegDcOnly, initWasm } from "@paleta/core";
+import { decodeJpegDcOnly, initWasm } from "@ken0106/core";
 
 await initWasm(await readFile("./packages/core/wasm/paleta_core_bg.wasm"));
 

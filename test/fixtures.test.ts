@@ -19,7 +19,7 @@ import {
   rgbToOKLab,
   type DecodeFn,
   type RGB,
-} from "@paleta/core";
+} from "@ken0106/core";
 import { decodePNG, encodePNG } from "./helpers/png.js";
 import { ALL_FIXTURES, type Fixture } from "./helpers/fixtures.js";
 

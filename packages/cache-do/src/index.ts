@@ -1,5 +1,5 @@
 /**
- * @paleta/cache-do — Durable Object SQLite cache backend.
+ * @ken0106/cache-do — Durable Object SQLite cache backend.
  *
  * Why a Durable Object:
  *   - `caches.default` is colo-local. Cold requests in a different colo pay
@@ -12,7 +12,7 @@
  * Contract:
  *   The DO exposes three RPC methods: `cacheGet`, `cachePut`, `cachePurge`.
  *   A thin JS adapter (`paletaDurableCache`) wraps an `env.PALETA_CACHE`
- *   binding into the `PaletteCacheBackend` shape that `@paleta/core`
+ *   binding into the `PaletteCacheBackend` shape that `@ken0106/core`
  *   understands.
  *
  * Wrangler setup (minimal):
@@ -26,7 +26,7 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import type { PaletteCacheBackend, PaletteResult } from "@paleta/core";
+import type { PaletteCacheBackend, PaletteResult } from "@ken0106/core";
 
 interface Env {
   [key: string]: unknown;
@@ -138,7 +138,7 @@ export interface PaletaCacheNamespace {
 
 /**
  * Wrap a DO namespace into the `PaletteCacheBackend` shape expected by
- * `@paleta/core`.
+ * `@ken0106/core`.
  *
  * `shardKey` lets you scale out past a single DO's 10 GB ceiling by hashing
  * the palette key into N buckets. Default "default" = everything in one DO,

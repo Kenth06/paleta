@@ -1,12 +1,12 @@
-# @paleta/cache-do
+# @ken0106/cache-do
 
 > Durable Object SQLite cache backend for
-> [@paleta/core](https://www.npmjs.com/package/@paleta/core).
+> [@ken0106/core](https://www.npmjs.com/package/@ken0106/core).
 > Cross-colo palette cache, free-tier compatible, ~2.7 KB of wrapper
 > code on top of the DO runtime.
 
 ```sh
-npm install @paleta/core @paleta/cache-do
+npm install @ken0106/core @ken0106/cache-do
 ```
 
 ## Why
@@ -39,8 +39,8 @@ Paleta JSON is tiny (~300 bytes per entry), so a single 10 GB DO fits
 Worker entrypoint — re-export the class so wrangler can instantiate it:
 
 ```ts
-import { paletaDurableCache } from "@paleta/cache-do";
-export { PaletaCacheDO } from "@paleta/cache-do";
+import { paletaDurableCache } from "@ken0106/cache-do";
+export { PaletaCacheDO } from "@ken0106/cache-do";
 
 export default {
   async fetch(req, env) {

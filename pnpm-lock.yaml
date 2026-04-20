@@ -14,16 +14,16 @@ importers:
       '@jsquash/jpeg':
         specifier: ^1.6.0
         version: 1.6.0
-      '@paleta/cache-do':
+      '@ken0106/cache-do':
         specifier: workspace:*
         version: link:packages/cache-do
-      '@paleta/core':
+      '@ken0106/core':
         specifier: workspace:*
         version: link:packages/core
-      '@paleta/exif':
+      '@ken0106/exif':
         specifier: workspace:*
         version: link:packages/exif
-      '@paleta/jsquash':
+      '@ken0106/jsquash':
         specifier: workspace:*
         version: link:packages/jsquash
       '@types/node':
@@ -53,13 +53,13 @@ importers:
       '@jsquash/webp':
         specifier: ^1.5.0
         version: 1.5.0
-      '@paleta/cache-do':
+      '@ken0106/cache-do':
         specifier: workspace:*
         version: link:../../packages/cache-do
-      '@paleta/core':
+      '@ken0106/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@paleta/jsquash':
+      '@ken0106/jsquash':
         specifier: workspace:*
         version: link:../../packages/jsquash
     devDependencies:
@@ -84,13 +84,13 @@ importers:
       '@jsquash/webp':
         specifier: ^1.5.0
         version: 1.5.0
-      '@paleta/cache-do':
+      '@ken0106/cache-do':
         specifier: workspace:*
         version: link:../../packages/cache-do
-      '@paleta/core':
+      '@ken0106/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@paleta/jsquash':
+      '@ken0106/jsquash':
         specifier: workspace:*
         version: link:../../packages/jsquash
     devDependencies:
@@ -103,7 +103,7 @@ importers:
 
   packages/cache-do:
     dependencies:
-      '@paleta/core':
+      '@ken0106/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -129,7 +129,7 @@ importers:
       '@jsquash/webp':
         specifier: ^1.5.0
         version: 1.5.0
-      '@paleta/core':
+      '@ken0106/core':
         specifier: workspace:*
         version: link:../core
 

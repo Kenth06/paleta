@@ -1,5 +1,5 @@
 import { bench, describe } from "vitest";
-import { buildHistogram, quantizeWu } from "@paleta/core";
+import { buildHistogram, quantizeWu } from "@ken0106/core";
 
 function noisyRGBA(w: number, h: number, seed = 42): Uint8Array {
   const out = new Uint8Array(w * h * 4);

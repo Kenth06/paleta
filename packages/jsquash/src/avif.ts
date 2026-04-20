@@ -1,4 +1,4 @@
-import type { DecodeFn } from "@paleta/core";
+import type { DecodeFn } from "@ken0106/core";
 import { toArrayBuffer, toDecoded } from "./shared.js";
 
 let decoderPromise: Promise<DecodeFn> | undefined;

@@ -6,7 +6,7 @@
  * (in rough order of population). Used by the fixtures test suite.
  */
 
-import type { RGB } from "@paleta/core";
+import type { RGB } from "@ken0106/core";
 
 export interface Fixture {
   name: string;

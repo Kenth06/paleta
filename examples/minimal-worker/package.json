@@ -1,5 +1,5 @@
 {
-  "name": "@paleta/example-minimal-worker",
+  "name": "@ken0106/example-minimal-worker",
   "version": "0.0.0",
   "private": true,
   "description": "Deployable /palette?url=... Cloudflare Worker using paleta.",
@@ -10,9 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@paleta/cache-do": "workspace:*",
-    "@paleta/core": "workspace:*",
-    "@paleta/jsquash": "workspace:*",
+    "@ken0106/cache-do": "workspace:*",
+    "@ken0106/core": "workspace:*",
+    "@ken0106/jsquash": "workspace:*",
     "@jsquash/jpeg": "^1.6.0",
     "@jsquash/png": "^3.1.0",
     "@jsquash/webp": "^1.5.0",

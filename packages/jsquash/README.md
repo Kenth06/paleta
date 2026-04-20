@@ -1,12 +1,12 @@
-# @paleta/jsquash
+# @ken0106/jsquash
 
 > [jSquash](https://github.com/jamsinclair/jSquash) decoder adapters for
-> [@paleta/core](https://www.npmjs.com/package/@paleta/core). Lazy WASM
+> [@ken0106/core](https://www.npmjs.com/package/@ken0106/core). Lazy WASM
 > loading per format, optional peer dependencies, ~900 bytes of adapter
 > code per codec on top of jSquash's native WASM.
 
 ```sh
-npm install @paleta/core @paleta/jsquash
+npm install @ken0106/core @ken0106/jsquash
 # + the codecs you actually need:
 npm install @jsquash/jpeg @jsquash/png @jsquash/webp @jsquash/avif
 ```
@@ -20,8 +20,8 @@ bundler only bundles the ones you install.
 ## Quick start
 
 ```ts
-import { getPalette } from "@paleta/core";
-import { autoDecoders, decodeJPEG } from "@paleta/jsquash";
+import { getPalette } from "@ken0106/core";
+import { autoDecoders, decodeJPEG } from "@ken0106/jsquash";
 
 // All four formats — WASM loads lazily on first use:
 await getPalette(url, { decoders: autoDecoders() });
@@ -33,10 +33,10 @@ await getPalette(url, { decoders: { jpeg: decodeJPEG } });
 ## Named imports (tree-shakeable)
 
 ```ts
-import { decodeJPEG } from "@paleta/jsquash/jpeg";
-import { decodePNG }  from "@paleta/jsquash/png";
-import { decodeWebP } from "@paleta/jsquash/webp";
-import { decodeAVIF } from "@paleta/jsquash/avif";
+import { decodeJPEG } from "@ken0106/jsquash/jpeg";
+import { decodePNG }  from "@ken0106/jsquash/png";
+import { decodeWebP } from "@ken0106/jsquash/webp";
+import { decodeAVIF } from "@ken0106/jsquash/avif";
 ```
 
 Each entry triggers its own jSquash WASM fetch on first call and memoizes

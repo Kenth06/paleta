@@ -1,19 +1,19 @@
-# @paleta/exif
+# @ken0106/exif
 
 > EXIF APP1 embedded-JPEG thumbnail extractor. Pass the output to
-> [@paleta/core](https://www.npmjs.com/package/@paleta/core)'s
+> [@ken0106/core](https://www.npmjs.com/package/@ken0106/core)'s
 > `thumbnailExtractor` option to turn full-image decodes into ~5ms
 > thumbnail decodes when the JPEG ships one.
 
 ```sh
-npm install @paleta/exif
+npm install @ken0106/exif
 ```
 
 ## Quick start
 
 ```ts
-import { extractExifThumbnail } from "@paleta/exif";
-import { getPalette } from "@paleta/core";
+import { extractExifThumbnail } from "@ken0106/exif";
+import { getPalette } from "@ken0106/core";
 
 const result = await getPalette(jpegUrl, {
   decoders: { jpeg: myJpegDecoder },

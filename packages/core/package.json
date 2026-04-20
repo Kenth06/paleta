@@ -1,5 +1,5 @@
 {
-  "name": "@paleta/core",
+  "name": "@ken0106/core",
   "version": "0.1.0-alpha.0",
   "description": "Pure-TS kernel for paleta: sniff, quantize (Wu), OKLab, cache pipeline.",
   "type": "module",

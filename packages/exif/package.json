@@ -1,5 +1,5 @@
 {
-  "name": "@paleta/exif",
+  "name": "@ken0106/exif",
   "version": "0.1.0-alpha.0",
   "description": "Extract EXIF APP1 thumbnails from JPEGs for fast-path palette extraction.",
   "type": "module",

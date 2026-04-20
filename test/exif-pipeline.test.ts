@@ -9,8 +9,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { getPalette, type DecodeFn, type DecodedImage } from "@paleta/core";
-import { extractExifThumbnail } from "@paleta/exif";
+import { getPalette, type DecodeFn, type DecodedImage } from "@ken0106/core";
+import { extractExifThumbnail } from "@ken0106/exif";
 
 /** Build a JPEG-shaped byte array with APP1/Exif + an embedded inner JPEG. */
 function buildJpegWithExifThumb(outerMark: number, innerMark: number): Uint8Array {

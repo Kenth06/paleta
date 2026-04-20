@@ -3,7 +3,7 @@
  * the WASM into its own chunk and JPEG-only Workers don't pay for the others.
  */
 
-import type { DecodeFn } from "@paleta/core";
+import type { DecodeFn } from "@ken0106/core";
 import { toArrayBuffer, toDecoded } from "./shared.js";
 
 let decoderPromise: Promise<DecodeFn> | undefined;

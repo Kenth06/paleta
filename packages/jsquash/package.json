@@ -1,7 +1,7 @@
 {
-  "name": "@paleta/jsquash",
+  "name": "@ken0106/jsquash",
   "version": "0.1.0-alpha.0",
-  "description": "jSquash decoder adapters for @paleta/core. Dynamic WASM loading, optional peers.",
+  "description": "jSquash decoder adapters for @ken0106/core. Dynamic WASM loading, optional peers.",
   "type": "module",
   "license": "MIT",
   "sideEffects": false,
@@ -36,7 +36,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@paleta/core": "workspace:*"
+    "@ken0106/core": "workspace:*"
   },
   "peerDependencies": {
     "@jsquash/jpeg": "^1.6.0",

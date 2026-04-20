@@ -6,10 +6,10 @@ import {
   initWasm,
   quantizeWu,
   quantizeWuWasm,
-} from "@paleta/core";
+} from "@ken0106/core";
 
 // Dynamically import the bindgen module to call build_histogram_total,
-// which isn't re-exported from @paleta/core but is useful for measuring
+// which isn't re-exported from @ken0106/core but is useful for measuring
 // the pure histogram cost.
 const bindgen = (await import("../packages/core/wasm/paleta_core.js")) as unknown as {
   build_histogram_total: (
@@ -27,7 +27,7 @@ const wasmBytes = await readFile(WASM_PATH);
 await initWasm(wasmBytes);
 // Independently init the bindgen module instance used by this file's direct
 // `bindgen.build_histogram_total` calls. ESM module caching means this is
-// the same singleton as the one @paleta/core uses, but we call `default`
+// the same singleton as the one @ken0106/core uses, but we call `default`
 // again to be safe — a second init is a no-op in wasm-bindgen.
 await (bindgen as unknown as {
   default: (input: unknown) => Promise<unknown>;

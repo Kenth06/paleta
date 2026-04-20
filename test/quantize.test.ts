@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHistogram, quantizeWu } from "@paleta/core";
+import { buildHistogram, quantizeWu } from "@ken0106/core";
 
 function solidRGBA(width: number, height: number, r: number, g: number, b: number): Uint8Array {
   const out = new Uint8Array(width * height * 4);

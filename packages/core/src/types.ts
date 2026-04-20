@@ -1,5 +1,5 @@
 /**
- * Public types for @paleta/core.
+ * Public types for @ken0106/core.
  *
  * Keep this file dependency-free. Runtime code lives elsewhere.
  */
@@ -82,7 +82,7 @@ export interface PaletteOptions {
    * Optional JPEG thumbnail extractor. When provided and the input is JPEG,
    * the pipeline tries the extractor first; if it yields a thumbnail, that
    * thumbnail is decoded instead of the full image (much faster). Typically
-   * `extractExifThumbnail` from `@paleta/exif`.
+   * `extractExifThumbnail` from `@ken0106/exif`.
    */
   thumbnailExtractor?: (bytes: Uint8Array) => { bytes: Uint8Array } | Uint8Array | undefined;
   /**
@@ -122,7 +122,7 @@ export interface PaletteResult {
 }
 
 /**
- * Minimal async cache contract. Implemented by @paleta/cache-do for a
+ * Minimal async cache contract. Implemented by @ken0106/cache-do for a
  * Durable Object SQLite backend, and easy to wrap KV/R2/Redis yourself.
  *
  * - `get(key)` resolves with a stored `PaletteResult` or `undefined` on miss.

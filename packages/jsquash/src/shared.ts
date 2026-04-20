@@ -6,7 +6,7 @@
  * is compatible at the byte level — no copy is needed.
  */
 
-import type { DecodedImage } from "@paleta/core";
+import type { DecodedImage } from "@ken0106/core";
 
 export interface JSquashImageData {
   data: Uint8Array | Uint8ClampedArray;

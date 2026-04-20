@@ -1,8 +1,8 @@
 /**
- * @paleta/core — pure-TS kernel.
+ * @ken0106/core — pure-TS kernel.
  *
  * Pipelines image bytes into a perceptually-sorted color palette.
- * Bring your own decoder (e.g. from @paleta/jsquash).
+ * Bring your own decoder (e.g. from @ken0106/jsquash).
  */
 
 export { getPalette, getColor } from "./pipeline.js";

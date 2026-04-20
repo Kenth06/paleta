@@ -1,6 +1,6 @@
 # paleta-core (Rust)
 
-v0.2 replacement for the TS hot path in `@paleta/core`. Compiles to WASM with
+v0.2 replacement for the TS hot path in `@ken0106/core`. Compiles to WASM with
 SIMD for use in Cloudflare Workers and browsers.
 
 ## Status
@@ -16,7 +16,7 @@ cargo install wasm-bindgen-cli wasm-opt
 ../../scripts/build-wasm.sh
 ```
 
-Output lands in `packages/core/wasm/` so `@paleta/core` can dynamic-import it
+Output lands in `packages/core/wasm/` so `@ken0106/core` can dynamic-import it
 at runtime once v0.2 ships.
 
 ## Design notes

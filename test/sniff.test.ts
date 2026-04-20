@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sniffFormat } from "@paleta/core";
+import { sniffFormat } from "@ken0106/core";
 
 function bytes(arr: number[]): Uint8Array {
   return new Uint8Array(arr);

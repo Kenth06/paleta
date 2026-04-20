@@ -17,9 +17,9 @@ import {
   pickAccent,
   PaletteError,
   type RGB,
-} from "@paleta/core";
-import { autoDecoders } from "@paleta/jsquash";
-import { paletaDurableCache } from "@paleta/cache-do";
+} from "@ken0106/core";
+import { autoDecoders } from "@ken0106/jsquash";
+import { paletaDurableCache } from "@ken0106/cache-do";
 import { benchFixtureBytes } from "./bench-fixture.js";
 import { init as initJpegCodec } from "@jsquash/jpeg/decode";
 import { init as initPngCodec } from "@jsquash/png/decode";
@@ -42,7 +42,7 @@ import avifDecWasm from "../node_modules/@jsquash/avif/codec/dec/avif_dec.wasm";
 
 // Re-export the DO class so wrangler can instantiate it. The class must be
 // at the Worker module level or Cloudflare can't wire it up.
-export { PaletaCacheDO } from "@paleta/cache-do";
+export { PaletaCacheDO } from "@ken0106/cache-do";
 
 interface Env {
   ALLOWED_HOSTS?: string;

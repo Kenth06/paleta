@@ -65,7 +65,7 @@ but not `.default`. Cloudflare's `@cloudflare/workers-types` augments
 when DOM isn't also pulled in.
 **Avoid next time**: In Worker-specific packages, override `lib` to drop DOM.
 Keep only `["ES2023"]` and add `types: ["@cloudflare/workers-types"]`.
-Library packages (`@paleta/core`) keep DOM since they need `fetch`/`Response`
+Library packages (`@ken0106/core`) keep DOM since they need `fetch`/`Response`
 in non-Worker runtimes.
 
 ### 2026-04-17 — vitest bench does not await `beforeAll`
@@ -90,7 +90,7 @@ the .d.ts option type is a union that includes the object form.
 ### 2026-04-17 — tsup caches — add new exports to both index.ts AND rebuild
 **What**: Added `initWasm`, `isWasmReady`, `quantizeWuWasm` to
 `quantize/index.ts` but not to `src/index.ts`. Tests importing from
-`@paleta/core` failed with `initWasm is not a function` because the
+`@ken0106/core` failed with `initWasm is not a function` because the
 workspace resolves to `packages/core/dist/index.js`.
 **Why**: Forgot that the package's public surface is `src/index.ts`, not
 whatever happens to be re-exported from a submodule. Additionally, `dist/`

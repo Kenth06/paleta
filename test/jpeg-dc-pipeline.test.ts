@@ -15,7 +15,7 @@ import {
   initWasm,
   type DecodeFn,
   type DecodedImage,
-} from "@paleta/core";
+} from "@ken0106/core";
 
 const WASM_PATH = fileURLToPath(
   new URL("../packages/core/wasm/paleta_core_bg.wasm", import.meta.url),

@@ -16,7 +16,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { bench, describe } from "vitest";
-import { decodeJpegDcOnly, initWasm } from "@paleta/core";
+import { decodeJpegDcOnly, initWasm } from "@ken0106/core";
 
 // Init paleta WASM at module top.
 const PALETA_WASM = fileURLToPath(
@@ -100,7 +100,7 @@ describe("1280×720 realistic scene 4:2:0", () => {
 /** End-to-end palette extraction: the number users actually care about.
  *  DC-only decodes a tiny image that the histogram chews through quickly.
  *  Full decode yields a big buffer that needs resize before histogram. */
-import { getPalette } from "@paleta/core";
+import { getPalette } from "@ken0106/core";
 
 const dcDecoder = async (bytes: Uint8Array) => {
   const dc = await decodeJpegDcOnly(bytes);

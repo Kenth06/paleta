@@ -28,10 +28,10 @@ If a change doesn't move one of those five needles, reject it.
 ## Architecture (locked, change requires writing a new ADR below)
 
 ```
-@paleta/core      pure-TS kernel (sniff, types, pipeline, pure-JS Wu quantizer)
-@paleta/jsquash   JPEG/PNG/WebP/AVIF adapters — jSquash, lazy WASM, optional peers
-@paleta/exif      EXIF APP1 thumbnail extractor (JPEG fast path)
-@paleta/worker    deployable /palette?url=... Worker
+@ken0106/core      pure-TS kernel (sniff, types, pipeline, pure-JS Wu quantizer)
+@ken0106/jsquash   JPEG/PNG/WebP/AVIF adapters — jSquash, lazy WASM, optional peers
+@ken0106/exif      EXIF APP1 thumbnail extractor (JPEG fast path)
+@ken0106/worker    deployable /palette?url=... Worker
 paleta-core (Rust) v0.2 SIMD WASM quantizer (scaffold only in v0.1)
 ```
 
@@ -52,12 +52,12 @@ input → sniff → cache-lookup(caches.default, optional DO) →
 
 ## Invariants
 
-- **The core has zero runtime dependencies.** If you're about to `pnpm add` something to `@paleta/core`, stop and ask why.
+- **The core has zero runtime dependencies.** If you're about to `pnpm add` something to `@ken0106/core`, stop and ask why.
 - **All decoders are optional peers.** A JPEG-only consumer must not ship PNG/WebP/AVIF WASM.
 - **Static WASM imports are forbidden outside the per-format adapter modules.** Use dynamic `import()` so Wrangler/bundlers can code-split.
 - **The public API never throws on input-bytes being the wrong format.** Return a typed error result or throw a `PaletteError` with a known `code`. Never leak a decoder's internal error.
 - **Palettes are always returned sorted.** Sort key: OKLab population weight, ties broken by chroma then lightness.
-- **Nothing imports from `node:*` in `@paleta/core`.** If you need Node APIs, you're in the wrong package.
+- **Nothing imports from `node:*` in `@ken0106/core`.** If you need Node APIs, you're in the wrong package.
 - **No `eval`, no `new Function`.** Workers block both, and MCP-strict environments do too.
 - **No `TextEncoder`/`TextDecoder` in decoder hot paths.** Workers supports them, but avoiding them keeps us portable to simpler V8 runtimes.
 
@@ -141,7 +141,7 @@ Append below. Each one dated. Each one has: Context, Decision, Consequences, Alt
 
 **Context**: cf-colorthief statically imports all four jSquash codecs (~1.3MB WASM) even when the caller only processes JPEGs.
 
-**Decision**: Split into `@paleta/core` (kernel, no WASM) + `@paleta/jsquash` (with optional peer deps). Callers opt into formats they need.
+**Decision**: Split into `@ken0106/core` (kernel, no WASM) + `@ken0106/jsquash` (with optional peer deps). Callers opt into formats they need.
 
 **Consequences**: JPEG-only Worker ships ~200KB instead of 1.3MB. Users must wire decoders explicitly. README needs a quickstart that makes this non-annoying.
 
@@ -171,7 +171,7 @@ Append below. Each one dated. Each one has: Context, Decision, Consequences, Alt
 
 ## Open questions / TODO
 
-- Figure out actual npm scope at publish time (`@paleta/*` likely taken — check before first publish).
+- Figure out actual npm scope at publish time (`@ken0106/*` likely taken — check before first publish).
 - Decide: include `PaletteError` class in core or keep errors as typed results?
 - Decide: should `getPalette` accept `ReadableStream` directly, or always buffer? Streaming decode has no jSquash support today.
 - Write the fixture generation script (50 test images with known expected palettes).

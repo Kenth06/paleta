@@ -1,11 +1,11 @@
-# @paleta/core
+# @ken0106/core
 
 > The pure-TS kernel for [paleta](https://github.com/Kenth06/paleta) —
 > correct image-format sniffing, Wu color quantization, OKLab color math,
 > and an edge-ready palette-extraction pipeline. Bring your own decoder.
 
 ```sh
-npm install @paleta/core
+npm install @ken0106/core
 ```
 
 ## Status
@@ -15,12 +15,12 @@ npm install @paleta/core
 ## Quick start
 
 ```ts
-import { getPalette, initWasm } from "@paleta/core";
+import { getPalette, initWasm } from "@ken0106/core";
 import { readFile } from "node:fs/promises";
 
 // Rust WASM quantizer (optional — pure-JS fallback runs without it).
 await initWasm(await readFile(
-  new URL("@paleta/core/wasm", import.meta.url),
+  new URL("@ken0106/core/wasm", import.meta.url),
 ));
 
 const result = await getPalette(bytes, {
@@ -60,13 +60,13 @@ Full API: the TypeScript `.d.ts` files under `dist/`.
 
 ## Decoders
 
-`@paleta/core` is decoder-agnostic. You pass a `DecodeFn` for each format
+`@ken0106/core` is decoder-agnostic. You pass a `DecodeFn` for each format
 you support. The companion package
-[`@paleta/jsquash`](https://www.npmjs.com/package/@paleta/jsquash) provides
+[`@ken0106/jsquash`](https://www.npmjs.com/package/@ken0106/jsquash) provides
 jSquash-backed decoders for JPEG/PNG/WebP/AVIF:
 
 ```ts
-import { autoDecoders } from "@paleta/jsquash";
+import { autoDecoders } from "@ken0106/jsquash";
 await getPalette(url, { decoders: autoDecoders(), … });
 ```
 

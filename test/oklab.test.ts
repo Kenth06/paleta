@@ -5,7 +5,7 @@ import {
   oklabToRgb,
   rgbToOKLab,
   rgbToOKLCH,
-} from "@paleta/core";
+} from "@ken0106/core";
 
 describe("OKLab round-trip", () => {
   it("round-trips primary colors within 1 unit per channel", () => {

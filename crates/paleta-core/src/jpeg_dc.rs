@@ -132,6 +132,13 @@ pub fn decode(bytes: &[u8]) -> Option<DcImage> {
             return None;
         }
         let len = ((bytes[p] as usize) << 8) | (bytes[p + 1] as usize);
+        // Segment length includes the 2-byte length field itself, so a valid
+        // length is always >= 2. Malformed files (often from bit-flipping an
+        // otherwise-valid byte) sometimes yield 0 or 1, which would produce
+        // an underflow in the payload slice.
+        if len < 2 {
+            return None;
+        }
         let payload_start = p + 2;
         let payload_end = p + len;
         if payload_end > bytes.len() {
@@ -228,12 +235,22 @@ fn parse_dqt(payload: &[u8], qts: &mut [Option<QTable>; 4]) -> Option<()> {
     Some(())
 }
 
+/// Max input dimension we'll attempt via DC-only. Above this we return
+/// None so the regular decoder takes over. 8192×8192 input → 1024×1024
+/// DC output → ~4 MB per intermediate buffer × 4 buffers = 16 MB worst
+/// case. Web JPEGs ≤ 4K (3840×2160) fit comfortably; defending against
+/// a malformed byte that sets width/height to 65535 preserves 4K headroom
+/// while preventing ~65 GB pathological allocations on corrupted inputs.
+const MAX_INPUT_DIMENSION: u16 = 8192;
+
 fn parse_sof(payload: &[u8], progressive: bool) -> Option<FrameInfo> {
     if payload.len() < 6 { return None; }
     let precision = payload[0];
     if precision != 8 { return None; }
     let height = ((payload[1] as u16) << 8) | (payload[2] as u16);
     let width = ((payload[3] as u16) << 8) | (payload[4] as u16);
+    if width == 0 || height == 0 { return None; }
+    if width > MAX_INPUT_DIMENSION || height > MAX_INPUT_DIMENSION { return None; }
     let nf = payload[5] as usize;
     if nf != 1 && nf != 3 && nf != 4 { return None; }
     if payload.len() < 6 + nf * 3 { return None; }
@@ -247,6 +264,8 @@ fn parse_sof(payload: &[u8], progressive: bool) -> Option<FrameInfo> {
         let qt_id = payload[base + 2];
         // Sanity: reject sampling factors outside what we support.
         if h == 0 || v == 0 || h > 2 || v > 2 { return None; }
+        // qt_id must index a valid 4-entry table array.
+        if qt_id >= 4 { return None; }
         components.push(FrameComponent { id, h, v, qt_id });
     }
     Some(FrameInfo { width, height, components, progressive })
@@ -447,6 +466,8 @@ fn process_scan(
         let table_ids = sos_header[2 + i * 2];
         let dc_id = table_ids >> 4;
         let ac_id = table_ids & 0x0f;
+        // Huffman-table ids must fit the 4-entry table array.
+        if dc_id >= 4 || ac_id >= 4 { return None; }
         let (fi, fc) = frame
             .components
             .iter()
@@ -671,8 +692,14 @@ fn dequantize_and_levelshift(dc: i32, q: u16) -> u8 {
 
 fn decode_block_dc(reader: &mut BitReader, table: &HuffmanTable, prev: &mut i32) -> Option<i32> {
     let s = huffman_decode(reader, table)?;
+    // DC category code. Valid range per JPEG spec is 0..=11. Reject larger
+    // values from malformed Huffman tables so receive_extend's shift does
+    // not overflow.
+    if s > 15 {
+        return None;
+    }
     let diff = receive_extend(reader, s)?;
-    *prev += diff;
+    *prev = prev.wrapping_add(diff);
     Some(*prev)
 }
 
@@ -686,6 +713,10 @@ fn skip_ac(reader: &mut BitReader, table: &HuffmanTable) -> Option<()> {
             if r == 15 { k += 16; continue; }
             return Some(());
         }
+        // s is guaranteed 0..=15 because we masked with 0x0f, so the shift
+        // in the read loop below is always safe. Advance the coefficient
+        // index by r+1; since r ≤ 15 and we loop while k ≤ 63, k cannot
+        // overflow.
         k += r as usize + 1;
         for _ in 0..s { reader.read_bit()?; }
     }
@@ -717,6 +748,10 @@ fn huffman_decode(reader: &mut BitReader, table: &HuffmanTable) -> Option<u8> {
 
 fn receive_extend(reader: &mut BitReader, s: u8) -> Option<i32> {
     if s == 0 { return Some(0); }
+    // `s` is a bit count. Legitimate JPEGs have s ≤ 11 for DC and ≤ 10 for
+    // AC. Reject anything that would overflow our 31-bit shift so callers
+    // fall back to the full decoder instead of us returning garbage.
+    if s >= 31 { return None; }
     let mut v: i32 = 0;
     for _ in 0..s { v = (v << 1) | (reader.read_bit()? as i32); }
     let half = 1i32 << (s - 1);

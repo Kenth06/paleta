@@ -131,6 +131,36 @@ Don't pad the list with trivial typos. Record mistakes that reveal a flawed beli
 - He values speed of shipping over theoretical perfection. Ship a v0.1 that works, iterate.
 - He prefers Spanish and English interchangeably — respond in whichever he used last.
 
+## Published state (as of 2026-04-20)
+
+All four packages are live on npm under the `@ken0106` scope. dist-tags
+`latest` and `alpha` both point to `0.1.0-alpha.0`.
+
+```
+@ken0106/core       0.1.0-alpha.0   (85 KB)
+@ken0106/jsquash    0.1.0-alpha.0   (4.7 KB)
+@ken0106/exif       0.1.0-alpha.0   (5.3 KB)
+@ken0106/cache-do   0.1.0-alpha.0   (5.6 KB)
+```
+
+The scope is `@ken0106` not `@paleta` because npm returned 404 when
+publishing to `@paleta` — the original scope is squatted/unavailable.
+If the user later registers the `@paleta` npm org, the rename is a
+mechanical find-replace (see commit `7e9a395` which did it one way).
+
+### Publishing workflow
+
+Use `scripts/publish.sh`. Bump version in each `packages/*/package.json`
+first. npm 2FA is on, so expect 4 OTP prompts per run.
+
+### Known npm/CDN quirk
+
+Fresh publishes can return 404 on `npm view` and `npm install` for up
+to ~15 minutes despite the tarball being live. The workaround:
+`npm cache clean --force && npm install --prefer-online <pkg>@alpha`.
+This is Cloudflare edge caching in front of npm's registry, not a
+real outage. Noted here so future-you doesn't panic.
+
 ---
 
 ## ADRs (Architecture Decision Records)

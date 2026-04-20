@@ -50,7 +50,21 @@
     "@jsquash/webp": { "optional": true },
     "@jsquash/avif": { "optional": true }
   },
-  "keywords": ["jsquash", "wasm", "decode", "paleta"],
+  "keywords": [
+    "jsquash",
+    "wasm",
+    "webassembly",
+    "decode",
+    "jpeg",
+    "png",
+    "webp",
+    "avif",
+    "mozjpeg",
+    "image-decode",
+    "paleta",
+    "cloudflare",
+    "workers"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Kenth06/paleta.git",

@@ -19,7 +19,18 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["exif", "jpeg", "thumbnail", "paleta"],
+  "keywords": [
+    "exif",
+    "jpeg",
+    "thumbnail",
+    "app1",
+    "tiff",
+    "ifd",
+    "palette",
+    "paleta",
+    "cloudflare",
+    "workers"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Kenth06/paleta.git",

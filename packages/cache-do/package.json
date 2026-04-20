@@ -25,7 +25,18 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250628.0"
   },
-  "keywords": ["paleta", "cache", "durable-object", "cloudflare"],
+  "keywords": [
+    "paleta",
+    "cache",
+    "durable-object",
+    "durable-objects",
+    "sqlite",
+    "cross-colo",
+    "palette",
+    "color-cache",
+    "cloudflare",
+    "workers"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Kenth06/paleta.git",

@@ -8,17 +8,12 @@
   --color-canvas: #0a0a0a;
   --color-surface: #111112;
   --color-line: rgba(255, 255, 255, 0.08);
-  --color-line-strong: rgba(255, 255, 255, 0.14);
   --color-ink: #ededee;
-  --color-ink-dim: #a1a1aa;
   --color-ink-faint: #52525b;
 }
 
 :root {
   color-scheme: dark;
-  --accent: #ffffff;
-  --accent-fg: #0a0a0a;
-  --accent-glow: 255 255 255;
 }
 
 html,
@@ -30,11 +25,6 @@ body {
 
 body {
   min-height: 100dvh;
-}
-
-::selection {
-  background: var(--accent);
-  color: var(--accent-fg);
 }
 
 @keyframes swatch-in {
@@ -52,21 +42,16 @@ body {
   animation: swatch-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-.slide-in {
-  animation: swatch-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
 .mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
 }
 
 .hairline {
   border: 1px solid var(--color-line);
 }
 
-:where(button, a, input, [role="button"]):focus-visible {
-  outline: 2px solid var(--accent);
+:where(button, input):focus-visible {
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
 }

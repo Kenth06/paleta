@@ -1,78 +1,69 @@
-# paleta — live demo
+# paleta — demo starter
 
-A visual playground for [paleta](https://github.com/Kenth06/paleta), served
-from a single Cloudflare Worker.
+A deployable starter you can clone to your own Cloudflare account. One
+Worker, one React SPA, one palette endpoint.
 
 - **Frontend:** Vite + React 19 + TypeScript + Tailwind v4 + Kumo
-- **Backend:** one Worker that also hosts the SPA via the `[assets]` binding
+- **Backend:** Cloudflare Worker (serves the SPA via the `[assets]` binding
+  and exposes `/api/palette?url=...`)
 - **Pipeline:** `@ken0106/core` + `@ken0106/jsquash` with `useDcOnlyJpeg: true`
-
-What the page shows:
-
-- Big dominant color card with HEX, RGB, and OKLCH values.
-- Full palette as click-to-copy swatches, sorted by perceptual OKLab dominance.
-- Accent playground — WCAG-best palette entry for any background.
-- Pipeline panel — which fast path (`dc-only`, `cache-hit`, `exif-thumb`,
-  `full-decode`) fired, plus decode / quantize / total timings.
-- A tiny mock UI that re-tints itself from the extracted palette.
 
 ## Run locally
 
 ```sh
 # from repo root
 pnpm install
-pnpm -r --filter=./packages/* build   # make sure dist/ + wasm/ are fresh
-pnpm -C examples/demo dev              # vite (5173) + wrangler dev (8787) in parallel
+pnpm -C examples/demo dev
 ```
 
-Open <http://localhost:5173>. Vite proxies `/api/*` to the Wrangler dev
-Worker on `:8787`.
+Open <http://localhost:5173>. Vite proxies `/api/*` to the wrangler dev
+Worker on `:8787`, so the UI hits the real runtime.
 
-## Deploy
+## Deploy to your own Cloudflare account
 
 ```sh
+wrangler login           # first time only
 pnpm -C examples/demo deploy
 ```
 
-This runs `vite build` (outputs `dist/`) and then `wrangler deploy`, which
-uploads the Worker and the built assets together. You'll need:
+That runs `vite build` then `wrangler deploy`. The Worker + built assets
+upload together. First deploy lands at
+`https://paleta-demo.<your-subdomain>.workers.dev`. Rename `name` in
+`wrangler.jsonc` to change the subdomain.
 
-- A Cloudflare account logged in via `wrangler login`.
-- The Worker's name is `paleta-demo` — change it in `wrangler.jsonc` if
-  you want a different subdomain.
+## Configure
 
-## Optional: cross-colo Durable Object cache
+Everything worth tweaking lives in `wrangler.jsonc`:
 
-Uncomment the marked blocks in `wrangler.jsonc` and re-export the DO class
-at the top of `src/worker.ts`:
+- **Worker name** — `name: "paleta-demo"`
+- **Host allowlist** — add `"vars": { "ALLOWED_HOSTS": "images.unsplash.com,*.your-cdn.com" }`
+  to restrict which image origins the API will fetch. Default is open so
+  the demo works against any public image URL.
+- **Durable Object cache** — uncomment the two blocks at the bottom of
+  `wrangler.jsonc` and the `export { PaletaCacheDO }` line in
+  `src/worker.ts` to enable sub-millisecond cross-colo cache hits.
 
-```ts
-export { PaletaCacheDO } from "@ken0106/cache-do";
-```
+## What the page shows
 
-Then `pnpm -C examples/demo deploy`. Repeat requests for the same image
-URL — from any colo — return in ~1 ms.
+- Dominant color card with HEX, RGB, and OKLCH (click to copy).
+- Click-to-copy swatches, sorted by OKLab dominance.
+- Pipeline panel — which fast path (`dc-only`, `cache-hit`, `exif-thumb`,
+  `full-decode`) fired, plus decode / quantize / total timings. `dc-only`
+  is highlighted because that's the library's killer feature.
+- The site accent (`--accent` CSS var) re-tints from the dominant color.
 
-## API surface
-
-One endpoint:
+## API
 
 ```
 GET /api/palette?url=<image>&count=<n>&bg=<#hex>
 ```
 
-Returns the standard paleta result enriched with:
+Returns the paleta result with two additions:
 
-- `palette[].oklch` — CSS OKLCH string per swatch.
-- `accents.onBlack` / `accents.onWhite` — pre-computed WCAG picks for the
-  two most common backgrounds, including contrast ratio and tier.
-- `accents.onCustom` — same, for a user-supplied `bg=` query param.
-- `meta.path` — which fast path fired (`dc-only`, `cache-hit`, `exif-thumb`,
-  `full-decode`).
-
-`ALLOWED_HOSTS` is a comma-separated allowlist (see `wrangler.jsonc`). It
-defaults to Unsplash + a few common CDNs to keep the deployed demo from
-getting abused. Open it up at your own risk.
+- `palette[].oklch` — CSS `oklch(...)` string per swatch.
+- `accents.onBlack` / `onWhite` — pre-computed WCAG picks for the two
+  most common backgrounds, including contrast ratio and WCAG tier.
+- `accents.onCustom` — same, for a `bg=` query param.
 
 ## Architecture
 
@@ -87,6 +78,6 @@ Browser ──fetch /api/palette── Worker ──── getPalette() ──�
    └──── static SPA served by [assets] binding (no Worker invocation)
 ```
 
-Non-API requests never invoke the Worker (`run_worker_first: ["/api/*"]`),
-so the free-tier invocation budget is spent on palette extraction, not
-on serving `index.html`.
+`run_worker_first: ["/api/*"]` keeps asset requests from invoking the
+Worker at all, so your free-tier budget funds palette extraction, not
+`index.html` delivery.

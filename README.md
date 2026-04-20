@@ -104,11 +104,9 @@ Slower but portable to any runtime; also avoids the 60 KB WASM payload.
 
 | Example | Shows |
 |---|---|
-| [`examples/demo`](./examples/demo) | Vite + React SPA + Worker — live palette playground with WCAG accent picks and pipeline path inspector |
+| [`examples/demo`](./examples/demo) | Starter template — Vite + React SPA + Worker, deploy your own with `pnpm deploy` |
 | [`examples/minimal-worker`](./examples/minimal-worker) | `/palette?url=…` endpoint, WASM, caches.default, optional DO, `/bench` |
 | [`examples/rpc-service`](./examples/rpc-service) | Worker-to-Worker via Service Bindings (zero-overhead RPC) |
-
-**Live demo:** _deploy with `pnpm -C examples/demo deploy` — URL TBD._
 
 ## Performance
 

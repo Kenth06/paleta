@@ -20,14 +20,24 @@ import {
 } from "@paleta/core";
 import { autoDecoders } from "@paleta/jsquash";
 import { paletaDurableCache } from "@paleta/cache-do";
+import { init as initJpegCodec } from "@jsquash/jpeg/decode";
+import { init as initPngCodec } from "@jsquash/png/decode";
+import { init as initWebpCodec } from "@jsquash/webp/decode";
+import { init as initAvifCodec } from "@jsquash/avif/decode";
 
-// The wrangler CompiledWasm rule turns this into a WebAssembly.Module at
-// build time. Imported by explicit relative path because wrangler's
-// esbuild does not apply the CompiledWasm rule to package-subpath-export
-// resolutions — the rule matches on file extension and esbuild sees the
-// virtual subpath name before it resolves to the actual .wasm file.
-// @ts-expect-error — resolved by wrangler, not TS.
+// All wrangler CompiledWasm imports. Relative paths because wrangler's
+// esbuild only applies the CompiledWasm rule when the literal extension is
+// visible in the import string.
+// @ts-expect-error — resolved by wrangler
 import paletaWasm from "../../../packages/core/wasm/paleta_core_bg.wasm";
+// @ts-expect-error — resolved by wrangler
+import mozjpegDecWasm from "../node_modules/@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm";
+// @ts-expect-error — resolved by wrangler
+import squooshPngWasm from "../node_modules/@jsquash/png/codec/pkg/squoosh_png_bg.wasm";
+// @ts-expect-error — resolved by wrangler
+import webpDecWasm from "../node_modules/@jsquash/webp/codec/dec/webp_dec.wasm";
+// @ts-expect-error — resolved by wrangler
+import avifDecWasm from "../node_modules/@jsquash/avif/codec/dec/avif_dec.wasm";
 
 // Re-export the DO class so wrangler can instantiate it. The class must be
 // at the Worker module level or Cloudflare can't wire it up.
@@ -39,16 +49,26 @@ interface Env {
   PALETA_CACHE?: DurableObjectNamespace;
 }
 
-// Initialize WASM once per isolate. The first request pays the init cost
-// (~5ms for 27KB of WASM); subsequent requests reuse the instantiated module.
+// Initialize all WASM modules once per isolate. Cold isolates pay the
+// one-time parse + instantiate cost for every codec we wire up; warm
+// requests reuse the same instances.
 let wasmReady: Promise<void> | undefined;
 function ensureWasm(): Promise<void> {
-  if (isWasmReady()) return Promise.resolve();
-  wasmReady ??= initWasm(paletaWasm as WebAssembly.Module).catch((err) => {
-    // Clear the promise so we can retry on the next request, but never block
-    // the request — fall back to pure-JS quantizer.
+  wasmReady ??= (async () => {
+    const steps: Array<Promise<unknown>> = [];
+    if (!isWasmReady()) steps.push(initWasm(paletaWasm as WebAssembly.Module));
+    steps.push(
+      initJpegCodec(mozjpegDecWasm as WebAssembly.Module),
+      initPngCodec(squooshPngWasm as WebAssembly.Module),
+      initWebpCodec(webpDecWasm as WebAssembly.Module),
+      initAvifCodec(avifDecWasm as WebAssembly.Module),
+    );
+    await Promise.all(steps);
+  })().catch((err) => {
+    // Reset so the next request retries. We never block on WASM init
+    // failure — the pipeline falls back where it can.
     wasmReady = undefined;
-    console.warn("paleta WASM init failed, falling back to JS:", err);
+    console.warn("WASM init failed:", err);
   });
   return wasmReady;
 }

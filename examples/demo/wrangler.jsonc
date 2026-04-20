@@ -14,10 +14,13 @@
   },
   "rules": [
     { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
-  ],
-  "vars": {
-    "ALLOWED_HOSTS": "images.unsplash.com,plus.unsplash.com,i.imgur.com,raw.githubusercontent.com,user-images.githubusercontent.com,cdn.jsdelivr.net,picsum.photos,fastly.picsum.photos,avatars.githubusercontent.com"
-  }
+  ]
+  // Host allowlist is intentionally open. The Worker only accepts http(s),
+  // the decoder rejects non-image bytes, and caches.default dedupes repeat
+  // URLs — so the blast radius of abuse is bounded to "someone pulls an
+  // image through our Worker". Add a `vars.ALLOWED_HOSTS` (comma-separated,
+  // `*.example.com` wildcards supported) if you want to lock it down.
+  //
   // Durable Object cross-colo cache — uncomment the two blocks below to enable.
   // Adds a sub-millisecond hit on repeat URLs across colos. Free tier compatible.
   //

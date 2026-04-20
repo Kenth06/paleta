@@ -4,22 +4,40 @@ All notable changes documented per Conventional Commits + Keep-a-Changelog.
 
 ## [Unreleased]
 
+_nothing yet — next tag will sit here._
+
+## [0.1.0-alpha.0] — 2026-04-20
+
+First tagged release. Four packages published to the `alpha` dist-tag:
+`@paleta/core`, `@paleta/jsquash`, `@paleta/exif`, `@paleta/cache-do`.
+
 ### Added
 - **JPEG DC-only decoder** (Rust, exposed as `decodeJpegDcOnly` +
   `PaletteOptions.useDcOnlyJpeg`). Parses only the DC coefficients and
   skips IDCT entirely, giving a 1/8×1/8 downsampled RGBA image for
-  roughly 1/64 the cost of a full decode. Supports baseline sequential
-  YCbCr JPEGs with 4:4:4 and 4:2:0 subsampling. Validated end-to-end
-  against PIL-generated fixtures.
+  roughly 1/64 the cost of a full decode. Supports:
+  - Baseline sequential (SOF0) and progressive (SOF2) JPEGs.
+  - 1-component (grayscale), 3-component (YCbCr), 4-component (YCCK/CMYK).
+  - Subsamplings 4:4:4 / 4:2:2 / 4:4:0 / 4:2:0.
+  - Interleaved AND non-interleaved progressive DC-first scans.
+  - DRI restart markers, byte-stuffed entropy streams.
+  - Adobe APP14 detection for YCCK vs raw CMYK.
 - `meta.path = 'dc-only'` reports when the fast path fires.
 - Real-image fixture suite (native PNG codec + 5 procedural fixtures,
   PIL-generated JPEG fixtures for DC-only). ΔE_OK < 4 quality gates.
+- Byte-flip fuzzer (`scripts/find-panic.mjs`) — 300,072 mutations across
+  all fixtures, zero panics.
 - `examples/rpc-service`: PaletaService Worker exposing palette extraction
   via Service Binding RPC + a consumer Worker.
+- `examples/minimal-worker` now decodes PNG/WebP/AVIF end-to-end on
+  Cloudflare Workers via explicit `CompiledWasm` jSquash WASM init.
+  `/bench?iters=N&path=dc|full` endpoint for real-runtime timing.
 - GitHub Actions CI: typecheck/test on Node 20 & 22, Rust WASM build
   on stable with SIMD, non-blocking bench summary job.
-- `scripts/build-wasm.sh` now runs `wasm-opt -O3` with SIMD +
+- `scripts/build-wasm.sh` runs `wasm-opt -O3` with SIMD +
   bulk-memory feature flags.
+- `scripts/publish.sh`: dry-run-by-default publish orchestration with
+  dependency-ordered `pnpm publish` + git tag.
 
 ### Changed
 - **WASM Wu quantizer: packed-moment layout + wasm-opt.** 5 cumulative
@@ -27,10 +45,35 @@ All notable changes documented per Conventional Commits + Keep-a-Changelog.
   fuses 5 previous calls into 1 eight-corner pass. Cuts loads from 40 to
   8 inside `variance()`. Paired with `wasm-opt -O3 --enable-simd`.
   Net: 7% faster mean, 9% better p99 vs v0.2 initial.
+- **JPEG DC-only decoder optimizations**: 256-entry Huffman fast lookup
+  and buffered u32 BitReader combine for an 11× speedup on the decoder
+  hot path (3.68 ms → 0.33 ms on 640×480 4:2:0 JPEG). Final result is
+  3–9× faster than `@jsquash/jpeg` (mozjpeg) across every tested size.
 - `@paleta/core`: `PaletteOptions.crossColoCache` accepts any
   `PaletteCacheBackend` (`{ get, put }`); promoted from `cache` API only.
 - Pipeline now does two-tier cache lookup (colo-local → cross-colo) and
   back-fills colo-local on cross-colo hits.
+
+### Fixed
+- Defensive guards against corrupted JPEG input: segment length < 2,
+  frame dimensions > 8192, out-of-range `qt_id` / `dc_huff_id` / `ac_huff_id`,
+  `receive_extend` shift overflow on `s >= 31`, DC accumulator switched
+  to `wrapping_add`. 300k fuzzing mutations now panic-free.
+
+### Performance summary vs. alternatives
+
+| Path                          | paleta          | mozjpeg full | Δ        |
+| ----------------------------- | --------------- | ------------ | -------- |
+| 64×64 baseline 4:4:4          | 0.006 ms        | 0.035 ms     | **5.9×** |
+| 128×128 baseline 4:2:0        | 0.009 ms        | 0.115 ms     | **12.3×**|
+| 640×480 baseline 4:4:4        | 0.55 ms         | 2.33 ms      | **4.2×** |
+| 640×480 baseline 4:2:0        | 0.33 ms         | 2.19 ms      | **6.7×** |
+| 1280×720 baseline 4:2:0       | 0.78 ms         | 6.27 ms      | **8.1×** |
+
+End-to-end `getPalette()` inside a real Cloudflare `workerd` isolate
+(640×480 4:2:0 JPEG, 300 iters):
+  - DC-only path: mean 0.73 ms, p99 2 ms, ~1,370 rps
+  - full-decode path: mean 2.54 ms, p99 6 ms, ~394 rps
 
 ## [0.4.0-alpha] — 2026-04-17
 

@@ -193,7 +193,7 @@ Append below. Each one dated. Each one has: Context, Decision, Consequences, Alt
 
 **Decision**: Ship TS kernel in v0.1. Scaffold Rust crate in v0.1 but don't wire it up. Replace the hot path in v0.2.
 
-**Consequences**: Faster time-to-first-useful-release. v0.2 becomes a drop-in perf upgrade.
+**Consequences**: Faster time-to-first-useful-release. v0.2 becomes a drop-in perf upgrade. v0.2 Rust WASM ships `panic=abort` by default for size; a `panic=unwind` build (workers-rs 0.8+, nightly + `-Zbuild-std`) is an opt-in reliability mode once the crate is live and we can bench the size/latency delta against the TS-Wu fallback catching `PanicError`.
 
 **Rejected**: Rust-first (slower to ship, risk of yak-shaving on Cargo config).
 

@@ -72,9 +72,9 @@ Live commitment, not an aspiration — regressions against these are release-blo
 | DC-only JPEG 1080p  | 1.06 ms       | ≤ 3 ms                  | 0.16 ms              | ≤ 1 ms            |
 | Full decode 1080p   | 6.61 ms       | ≤ 15 ms                 | 0.16 ms              | ≤ 1 ms            |
 
-Cache-hit number is the same across rows because the hit path doesn't re-run decode — it returns the cached palette directly. Measured in a workerd isolate via `examples/minimal-worker`'s `/bench?path=cache` endpoint (5,000 iters); see `bench/results/2026-04-24-cache-hit.md`.
+Cache-hit is the same across rows because the hit path doesn't re-run decode — returns the cached palette directly. Measured in workerd via `examples/minimal-worker`'s `/bench?path=cache` endpoint (5,000 iters); see `bench/results/2026-04-24-cache-hit.md`.
 
-Cold numbers aren't pinned yet — WASM parse cost needs its own bench. Don't invent a target; measure first.
+**Cold-start (first request in a fresh isolate):** `ensureWasm()` instantiate cost for the 5 WASM modules = **4 ms p50, 7.1 ms mean, 32 ms p95** (10 samples, wrangler dev). Ceiling: **≤ 10 ms p50**. Parse cost isn't measured — CompiledWasm imports are pre-parsed by the runtime before our code runs. Measurement is instantiate-only. First full cold request on DC-only ≈ 4 ms init + 1 ms pipeline = ~5 ms. See `bench/results/2026-04-24-cold-start.md` and run via `scripts/bench-cold-start.sh`.
 
 Re-bench every significant change. Commit the full results to `bench/results/YYYY-MM-DD.md` so drift is visible in git. If a measured mean crosses the ceiling column, that's a release-block — file an issue or fix before merging.
 
@@ -214,7 +214,7 @@ Append below. Each one dated. Each one has: Context, Decision, Consequences, Alt
 - Decide: should `getPalette` accept `ReadableStream` directly, or always buffer? Streaming decode has no jSquash support today.
 - Write the fixture generation script (50 test images with known expected palettes). Today `test/fixtures/` has 11 JPEGs (one of which carries an EXIF APP1 thumbnail for bench purposes; see `scripts/gen-exif-fixture.mjs`).
 - Measure in-the-wild EXIF-thumb hit rate on a representative URL sample (Unsplash, Pexels, direct CDN, camera dumps) before promoting the fast path to the pipeline default over DC-only.
-- Bench cold-start WASM parse cost. Today's numbers are all warm-isolate; the cold path (first request ever to a new isolate) bundles WASM parse + instantiate for the 5 codecs into one measurement that nobody has yet broken down.
+- Decide whether to gate WASM init by sniffed format. Today `ensureWasm()` instantiates all 5 codecs up-front (~4 ms p50 cold); a JPEG-only request wastes 3 of those instantiates. Relevant only if the 4 ms cold floor ever becomes a user-visible problem.
 
 ## Resolved (keep for history; do not reopen without ADR)
 

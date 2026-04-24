@@ -104,40 +104,85 @@ function allowedHost(host: string, env: Env): boolean {
   });
 }
 
+const BENCH_CACHE_KEY = "paleta-bench-cache-v1";
+
 /**
- * GET /bench?iters=200&path=dc|full
+ * GET /bench?iters=200&path=dc|full|cache
  *
  * Times N end-to-end palette extractions against an inlined 640×480 4:2:0
- * JPEG fixture. Returns mean/p50/p95/p99 so we can compare DC-only vs
- * full-decode from inside a real workerd isolate (no miniflare-wrangler-dev
- * cold-start noise between iterations).
+ * JPEG fixture. Returns mean/p50/p95/p99 so we can compare paths from
+ * inside a real workerd isolate (no miniflare-wrangler-dev cold-start
+ * noise between iterations).
  *
- * Not cached — every iteration runs the full pipeline fresh. The first
- * iteration of a cold isolate pays WASM-init; subsequent calls reuse.
+ *   path=dc     — DC-only JPEG decode (Rust WASM).
+ *   path=full   — jSquash mozjpeg full decode + resize.
+ *   path=cache  — prime caches.default once, then measure hit cost.
+ *                 Uses an explicit cacheKey because the fixture is raw
+ *                 bytes with no source URL.
+ *
+ * workerd rounds performance.now() to 1ms without the paid
+ * `high_precision_performance_now` compat flag, so single-iteration p99
+ * numbers are integer-ms upper bounds. The mean averages away the
+ * rounding over hundreds of samples — for cache-hit measurement push
+ * iters higher (e.g. 1000+) to get a reliable sub-ms mean.
  */
 async function runBench(params: URLSearchParams): Promise<Response> {
   await ensureWasm();
 
-  const iters = Math.max(1, Math.min(2000, Number.parseInt(params.get("iters") ?? "200", 10)));
-  const mode = (params.get("path") ?? "dc") === "full" ? "full" : "dc";
+  const iters = Math.max(1, Math.min(5000, Number.parseInt(params.get("iters") ?? "200", 10)));
+  const rawMode = params.get("path") ?? "dc";
+  const mode: "dc" | "full" | "cache" =
+    rawMode === "full" ? "full" : rawMode === "cache" ? "cache" : "dc";
 
   const fixture = benchFixtureBytes();
   const runs: number[] = [];
-  // Warm-up — first invocation primes the WASM instance caches.
-  await getPalette(fixture, {
+
+  const baseOpts = {
     decoders: autoDecoders(),
     colorCount: 8,
-    useDcOnlyJpeg: mode === "dc",
-  });
+    useDcOnlyJpeg: mode !== "full",
+  } as const;
 
-  for (let i = 0; i < iters; i++) {
-    const t0 = performance.now();
+  if (mode === "cache") {
+    // Prime — first call misses and writes to caches.default.
     await getPalette(fixture, {
-      decoders: autoDecoders(),
-      colorCount: 8,
-      useDcOnlyJpeg: mode === "dc",
+      ...baseOpts,
+      cache: caches.default,
+      cacheKey: BENCH_CACHE_KEY,
     });
-    runs.push(performance.now() - t0);
+    // Verify the next call is actually a hit. If it isn't, surface that
+    // up front rather than publishing a fake "cache hit" number that was
+    // really a full pipeline run.
+    const verify = await getPalette(fixture, {
+      ...baseOpts,
+      cache: caches.default,
+      cacheKey: BENCH_CACHE_KEY,
+    });
+    if (verify.meta.path !== "cache-hit") {
+      return json(
+        { error: "cache_not_priming", observed_path: verify.meta.path },
+        { status: 500 },
+      );
+    }
+
+    for (let i = 0; i < iters; i++) {
+      const t0 = performance.now();
+      await getPalette(fixture, {
+        ...baseOpts,
+        cache: caches.default,
+        cacheKey: BENCH_CACHE_KEY,
+      });
+      runs.push(performance.now() - t0);
+    }
+  } else {
+    // Warm-up — first invocation primes the WASM instance caches.
+    await getPalette(fixture, baseOpts);
+
+    for (let i = 0; i < iters; i++) {
+      const t0 = performance.now();
+      await getPalette(fixture, baseOpts);
+      runs.push(performance.now() - t0);
+    }
   }
 
   runs.sort((a, b) => a - b);

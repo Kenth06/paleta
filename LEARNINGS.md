@@ -23,6 +23,7 @@ Persistent notebook across Claude sessions. Append-only. Read before starting wo
 - **Service Bindings + RPC** — zero-overhead in-process calls. No network hop.
 - **Smart Placement** only affects `fetch` handlers, not RPC methods.
 - **`env` can be imported from `cloudflare:workers`** at module scope (not just during requests).
+- **Modern WASM Exception Handling** (with `exnref`) is live in workerd since **v1.20250620.0** (2025-06-20). Unlocks `panic=unwind` for Rust: panics surface as a JS `PanicError` instead of poisoning the isolate. Requires workers-rs ≥ 0.8, nightly Rust, `RUSTFLAGS='-Cpanic=unwind'`, `-Zbuild-std`. Relevant when we wire up `paleta-core` (see ADR-003). Source: https://blog.cloudflare.com/making-rust-workers-reliable/
 
 ## Algorithms
 

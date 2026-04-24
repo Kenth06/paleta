@@ -62,15 +62,19 @@ input → sniff → cache-lookup(caches.default, optional DO) →
 - **No `eval`, no `new Function`.** Workers block both, and MCP-strict environments do too.
 - **No `TextEncoder`/`TextDecoder` in decoder hot paths.** Workers supports them, but avoiding them keeps us portable to simpler V8 runtimes.
 
-## Perf targets (v1.0)
+## Perf targets
 
-| Path | Cold | Warm | Cache hit |
-|---|---|---|---|
-| EXIF-thumb JPEG | — | 5–15ms | 1–3ms |
-| DC-only JPEG 1080p | — | 10–25ms | 1–3ms |
-| Full decode 1080p | 120–180ms | 40–80ms | 1–3ms |
+Live commitment, not an aspiration — regressions against these are release-blockers. Numbers are **Node 24 / M2 Pro warm means** on the 1280×720 fixtures in `test/fixtures/`. Workers-isolate numbers are within ~15–30 % (see `bench/results/2026-04-20-workers-isolate.md`). Cold means include WASM parse + module evaluation.
 
-Re-bench every significant change. Commit `bench/results/` so drift is visible in git.
+| Path                | Measured warm | Ceiling (release-block) | Cache hit |
+| ------------------- | ------------- | ----------------------- | --------- |
+| EXIF-thumb JPEG     | 0.39 ms       | ≤ 1 ms                  | 1–3 ms    |
+| DC-only JPEG 1080p  | 1.06 ms       | ≤ 3 ms                  | 1–3 ms    |
+| Full decode 1080p   | 6.61 ms       | ≤ 15 ms                 | 1–3 ms    |
+
+Cold numbers aren't pinned yet — WASM parse cost needs its own bench. Don't invent a target; measure first.
+
+Re-bench every significant change. Commit the full results to `bench/results/YYYY-MM-DD.md` so drift is visible in git. If a measured mean crosses the ceiling column, that's a release-block — file an issue or fix before merging.
 
 ---
 

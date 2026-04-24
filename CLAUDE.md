@@ -66,11 +66,13 @@ input → sniff → cache-lookup(caches.default, optional DO) →
 
 Live commitment, not an aspiration — regressions against these are release-blockers. Numbers are **Node 24 / M2 Pro warm means** on the 1280×720 fixtures in `test/fixtures/`. Workers-isolate numbers are within ~15–30 % (see `bench/results/2026-04-20-workers-isolate.md`). Cold means include WASM parse + module evaluation.
 
-| Path                | Measured warm | Ceiling (release-block) | Cache hit |
-| ------------------- | ------------- | ----------------------- | --------- |
-| EXIF-thumb JPEG     | 0.39 ms       | ≤ 1 ms                  | 1–3 ms    |
-| DC-only JPEG 1080p  | 1.06 ms       | ≤ 3 ms                  | 1–3 ms    |
-| Full decode 1080p   | 6.61 ms       | ≤ 15 ms                 | 1–3 ms    |
+| Path                | Measured warm | Ceiling (release-block) | Cache hit (measured) | Cache hit ceiling |
+| ------------------- | ------------- | ----------------------- | -------------------- | ----------------- |
+| EXIF-thumb JPEG     | 0.39 ms       | ≤ 1 ms                  | 0.16 ms              | ≤ 1 ms            |
+| DC-only JPEG 1080p  | 1.06 ms       | ≤ 3 ms                  | 0.16 ms              | ≤ 1 ms            |
+| Full decode 1080p   | 6.61 ms       | ≤ 15 ms                 | 0.16 ms              | ≤ 1 ms            |
+
+Cache-hit number is the same across rows because the hit path doesn't re-run decode — it returns the cached palette directly. Measured in a workerd isolate via `examples/minimal-worker`'s `/bench?path=cache` endpoint (5,000 iters); see `bench/results/2026-04-24-cache-hit.md`.
 
 Cold numbers aren't pinned yet — WASM parse cost needs its own bench. Don't invent a target; measure first.
 
@@ -212,7 +214,7 @@ Append below. Each one dated. Each one has: Context, Decision, Consequences, Alt
 - Decide: should `getPalette` accept `ReadableStream` directly, or always buffer? Streaming decode has no jSquash support today.
 - Write the fixture generation script (50 test images with known expected palettes). Today `test/fixtures/` has 11 JPEGs (one of which carries an EXIF APP1 thumbnail for bench purposes; see `scripts/gen-exif-fixture.mjs`).
 - Measure in-the-wild EXIF-thumb hit rate on a representative URL sample (Unsplash, Pexels, direct CDN, camera dumps) before promoting the fast path to the pipeline default over DC-only.
-- Bench the cache-hit path inside workerd — `caches.default` isn't accessible from Node, so this lives in `examples/minimal-worker`.
+- Bench cold-start WASM parse cost. Today's numbers are all warm-isolate; the cold path (first request ever to a new isolate) bundles WASM parse + instantiate for the 5 codecs into one measurement that nobody has yet broken down.
 
 ## Resolved (keep for history; do not reopen without ADR)
 

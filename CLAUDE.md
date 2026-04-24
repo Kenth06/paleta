@@ -77,10 +77,11 @@ Re-bench every significant change. Commit `bench/results/` so drift is visible i
 ## Research loop (run at the start of every session, not just when stuck)
 
 1. Read `CLAUDE.md` (this file) and `LEARNINGS.md`.
-2. Check the Cloudflare Workers changelog for anything published since `LEARNINGS.md`'s last `last-checked` date. Focus on: WASM, SIMD, Durable Objects, RPC, Containers, Smart Placement, caches.
-3. Check jSquash, `quantette`, `libimagequant`, `photon-rs` release notes.
-4. If something new could change an architectural decision — write an ADR below before coding.
-5. Update `LEARNINGS.md` with `last-checked` and a one-line summary of anything notable.
+2. **Reality-check this file against the code before trusting it.** ADRs, the architecture block, the pipeline contract, and "Open questions" drift faster than they get updated. Before relying on a claim like "v0.3" or "scaffold only" or "not yet implemented", verify with `ls packages/*/src/`, a quick `grep` of the public exports in `packages/*/src/index.ts`, or `git log -- <path>`. If the code disagrees with this file, **the code is right** — fix this file in the same commit as your other work (or as its own `docs(claude): sync …` commit if the drift is large). Same applies to `LEARNINGS.md` entries that name specific APIs or versions. Stale docs are a bug; treat them like one.
+3. Check the Cloudflare Workers changelog for anything published since `LEARNINGS.md`'s last `last-checked` date. Focus on: WASM, SIMD, Durable Objects, RPC, Containers, Smart Placement, caches.
+4. Check jSquash, `quantette`, `libimagequant`, `photon-rs` release notes.
+5. If something new could change an architectural decision — write an ADR below before coding.
+6. Update `LEARNINGS.md` with `last-checked` and a one-line summary of anything notable.
 
 Be aggressive about adopting new Cloudflare primitives when they genuinely help. Be skeptical of them when they're beta/paid/lock-in.
 
@@ -111,6 +112,8 @@ When you make a mistake (failed test, wrong API, regression, wrong assumption), 
 Do this **immediately** after the fix, not "later". Future-you reads this file and learns from past-you — that's the entire point.
 
 Don't pad the list with trivial typos. Record mistakes that reveal a flawed belief or a gap in the codebase that tempted the mistake.
+
+**When you ship a feature, update this file in the same PR/commit stream.** If you add a public export, land a new pipeline branch, resolve an open question, or change the architecture — amend the ADR, the architecture block, the pipeline contract, or "Open questions" right then. Don't leave "will update later" TODOs. The `docs(claude): …` or `docs(learnings): …` commit lives next to the feature commit, not three sessions later.
 
 ---
 

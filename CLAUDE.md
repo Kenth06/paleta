@@ -185,15 +185,15 @@ Append below. Each one dated. Each one has: Context, Decision, Consequences, Alt
 
 **Rejected**: Single package with feature flags (too much bundler configuration burden on users).
 
-### ADR-002 — Wu quantizer over MMCQ for default (2026-04-17)
+### ADR-002 — Wu is the only shipped quantizer (2026-04-17, updated 2026-04-24)
 
 **Context**: MMCQ is O(pixels). Wu is O(histogram buckets = 32³ = 32,768) regardless of image size.
 
-**Decision**: Default algorithm is Wu. MMCQ is reserved in the `QuantizeAlgorithm` type for colorthief parity but its implementation is deferred — if a caller passes `'mmcq'` today the pipeline still runs Wu. Implement MMCQ only if a user actually needs bit-for-bit colorthief parity.
+**Decision**: Ship only Wu. The `QuantizeAlgorithm` type is narrowed to `"wu"` — not `"wu" | "mmcq"` — because the MMCQ branch was never implemented and the wider type silently ran Wu on callers who passed `'mmcq'`. A type that lies is worse than no knob. If someone later needs bit-for-bit colorthief parity, widen the type *and* wire up a real MMCQ implementation in the same change; don't split them.
 
-**Consequences**: 10× faster on large images. Slightly different palette output vs colorthief; parity tests allow ΔE2000 < 5.
+**Consequences**: 10× faster on large images vs pixel-space quantizers. Slightly different palette output vs colorthief; parity tests allow ΔE2000 < 5. Callers previously passing `algorithm: 'mmcq'` were silently getting Wu results — their TS now breaks, forcing them to acknowledge the reality.
 
-**Rejected**: Median cut (reference original, slower), k-means only (stochastic, not deterministic across runs).
+**Rejected**: Keep the wider type "as a placeholder" (lying types produce the very kind of session-start drift we're trying to prevent). Median cut (reference original, slower), k-means only (stochastic, not deterministic across runs).
 
 ### ADR-003 — TS + Rust/WASM dual implementation (2026-04-17, updated 2026-04-24)
 
@@ -210,10 +210,12 @@ Append below. Each one dated. Each one has: Context, Decision, Consequences, Alt
 ## Open questions / TODO
 
 - Decide: should `getPalette` accept `ReadableStream` directly, or always buffer? Streaming decode has no jSquash support today.
-- Write the fixture generation script (50 test images with known expected palettes). Today `test/fixtures/` has 10 JPEGs; no generator committed in `scripts/`.
-- Decide: implement `algorithm: 'mmcq'` for real, or narrow the `QuantizeAlgorithm` type back to `"wu"` only? (See ADR-002.)
+- Write the fixture generation script (50 test images with known expected palettes). Today `test/fixtures/` has 11 JPEGs (one of which carries an EXIF APP1 thumbnail for bench purposes; see `scripts/gen-exif-fixture.mjs`).
+- Measure in-the-wild EXIF-thumb hit rate on a representative URL sample (Unsplash, Pexels, direct CDN, camera dumps) before promoting the fast path to the pipeline default over DC-only.
+- Bench the cache-hit path inside workerd — `caches.default` isn't accessible from Node, so this lives in `examples/minimal-worker`.
 
 ## Resolved (keep for history; do not reopen without ADR)
 
 - npm scope → `@ken0106` (the original `@paleta` is squatted; see "Published state" above).
 - `PaletteError` → shipped as an exported class from `@ken0106/core` (`packages/core/src/types.ts`).
+- `QuantizeAlgorithm` → narrowed to `"wu"` in 2026-04-24; see ADR-002. Widen only alongside a real implementation.

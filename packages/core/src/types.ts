@@ -32,7 +32,13 @@ export type DecodeFn = (
 /** Map from sniffed format → decoder. Provide only the formats you want to support. */
 export type DecoderMap = Partial<Record<ImageFormat, DecodeFn>>;
 
-export type QuantizeAlgorithm = "wu" | "mmcq";
+/**
+ * Currently only `"wu"` is implemented. The union is kept as an extension
+ * point for adding colorthief-parity quantizers (`"mmcq"`) without another
+ * breaking type change — but do not expose a new member here without
+ * wiring it up in `pipeline.ts`. Silent fallback to Wu was the old bug.
+ */
+export type QuantizeAlgorithm = "wu";
 
 export type PipelinePath =
   | "cache-hit"

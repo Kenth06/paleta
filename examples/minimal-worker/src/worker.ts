@@ -50,12 +50,27 @@ interface Env {
   PALETA_CACHE?: DurableObjectNamespace;
 }
 
-// Initialize all WASM modules once per isolate. Cold isolates pay the
-// one-time parse + instantiate cost for every codec we wire up; warm
-// requests reuse the same instances.
+// Cold-start instrumentation for WASM instantiate cost.
+//
+// Caveats that drove this design:
+// - workerd clamps performance.now() resolution to 1ms without the paid
+//   `high_precision_performance_now` flag, and doesn't advance it
+//   within synchronous code (only across I/O / microtask boundaries).
+//   A per-codec breakdown using sync timers comes back as all-zeros,
+//   so we only measure the aggregate Promise.all() time.
+// - performance.now() at module top-level returns a different origin
+//   than inside a fetch handler (top-level gets an absolute-ish
+//   timestamp; handler calls get request-relative values). So a
+//   "module load to first call" delta would be bogus. We don't try.
+// - The measurement here is the *instantiate* cost only — CompiledWasm
+//   imports are already parsed by the time our code sees them.
+let firstEnsureWasmMs: number | undefined;
+
+// Initialize all WASM modules once per isolate.
 let wasmReady: Promise<void> | undefined;
 function ensureWasm(): Promise<void> {
   wasmReady ??= (async () => {
+    const t0 = performance.now();
     const steps: Array<Promise<unknown>> = [];
     if (!isWasmReady()) steps.push(initWasm(paletaWasm as WebAssembly.Module));
     steps.push(
@@ -65,6 +80,7 @@ function ensureWasm(): Promise<void> {
       initAvifCodec(avifDecWasm as WebAssembly.Module),
     );
     await Promise.all(steps);
+    firstEnsureWasmMs ??= +(performance.now() - t0).toFixed(3);
   })().catch((err) => {
     // Reset so the next request retries. We never block on WASM init
     // failure — the pipeline falls back where it can.
@@ -215,6 +231,20 @@ export default {
 
     if (url.pathname === "/bench") {
       return runBench(url.searchParams);
+    }
+
+    if (url.pathname === "/cold-stats") {
+      // Trigger WASM init and return the first-call measurement. Safe to
+      // call from a warm isolate too — subsequent calls just observe the
+      // cached number without overwriting it.
+      await ensureWasm();
+      if (firstEnsureWasmMs === undefined) {
+        return json({ error: "stats_unavailable" }, { status: 500 });
+      }
+      return json({
+        wasm_instantiate_ms: firstEnsureWasmMs,
+        note: "Time for Promise.all() over 5 initX(module) calls on first ensureWasm(). Parse cost isn't measured — CompiledWasm imports are pre-parsed.",
+      });
     }
 
     if (url.pathname !== "/palette") {

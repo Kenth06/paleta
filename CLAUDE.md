@@ -28,11 +28,12 @@ If a change doesn't move one of those five needles, reject it.
 ## Architecture (locked, change requires writing a new ADR below)
 
 ```
-@ken0106/core      pure-TS kernel (sniff, types, pipeline, pure-JS Wu quantizer)
+@ken0106/core      pure-TS kernel + Rust/WASM hot path (sniff, pipeline, Wu JS + WASM, DC-only JPEG)
 @ken0106/jsquash   JPEG/PNG/WebP/AVIF adapters — jSquash, lazy WASM, optional peers
 @ken0106/exif      EXIF APP1 thumbnail extractor (JPEG fast path)
+@ken0106/cache-do  Durable Object cache backend (optional; free-tier SQLite storage)
 @ken0106/worker    deployable /palette?url=... Worker
-paleta-core (Rust) v0.2 SIMD WASM quantizer (scaffold only in v0.1)
+crates/paleta-core Rust source for the shipped WASM (Wu quantizer + DC-only JPEG)
 ```
 
 Everything is pnpm workspace, TS strict mode, ESM only. Core ships without WASM. Core doesn't know about Cloudflare. The Worker package glues to caches.default and optional bindings.
@@ -42,7 +43,7 @@ Everything is pnpm workspace, TS strict mode, ESM only. Core ships without WASM.
 ```
 input → sniff → cache-lookup(caches.default, optional DO) →
   ├─ EXIF thumb (JPEG only, if present) →
-  ├─ DC-only decode (JPEG only, v0.3) →
+  ├─ DC-only decode (JPEG only, via Rust WASM) →
   └─ full decode via provided decoder
 → resize ≤128×128 → histogram → Wu quantize →
   OKLab re-rank → accent pick → write cache → return
@@ -181,27 +182,31 @@ Append below. Each one dated. Each one has: Context, Decision, Consequences, Alt
 
 **Context**: MMCQ is O(pixels). Wu is O(histogram buckets = 32³ = 32,768) regardless of image size.
 
-**Decision**: Default algorithm is Wu. MMCQ ships as `algorithm: 'mmcq'` for colorthief parity.
+**Decision**: Default algorithm is Wu. MMCQ is reserved in the `QuantizeAlgorithm` type for colorthief parity but its implementation is deferred — if a caller passes `'mmcq'` today the pipeline still runs Wu. Implement MMCQ only if a user actually needs bit-for-bit colorthief parity.
 
-**Consequences**: 10× faster on large images. Slightly different palette output; parity tests allow ΔE2000 < 5.
+**Consequences**: 10× faster on large images. Slightly different palette output vs colorthief; parity tests allow ΔE2000 < 5.
 
 **Rejected**: Median cut (reference original, slower), k-means only (stochastic, not deterministic across runs).
 
-### ADR-003 — TS-first, Rust in v0.2 (2026-04-17)
+### ADR-003 — TS + Rust/WASM dual implementation (2026-04-17, updated 2026-04-24)
 
-**Context**: Rust+WASM+SIMD gives 10–15× over JS. But Rust toolchain adds setup friction and the TS Wu is already fast enough for most images.
+**Context**: Rust+WASM+SIMD gives 10–15× over JS. Rust toolchain adds setup friction; the TS Wu is already fast enough for most images.
 
-**Decision**: Ship TS kernel in v0.1. Scaffold Rust crate in v0.1 but don't wire it up. Replace the hot path in v0.2.
+**Decision**: Ship both. `@ken0106/core` exports `quantizeWu` (pure JS) and `quantizeWuWasm` (Rust/WASM via `initWasm(bytes)`). `decodeJpegDcOnly` also ships from the Rust crate. Callers opt into WASM by initializing; without it, the JS path is the default.
 
-**Consequences**: Faster time-to-first-useful-release. v0.2 becomes a drop-in perf upgrade. v0.2 Rust WASM ships `panic=abort` by default for size; a `panic=unwind` build (workers-rs 0.8+, nightly + `-Zbuild-std`) is an opt-in reliability mode once the crate is live and we can bench the size/latency delta against the TS-Wu fallback catching `PanicError`.
+**Consequences**: Users get the fast path when they want it and a zero-dependency fallback when they don't. `paleta-core_bg.wasm` is committed in `packages/core/wasm/` (see `scripts/build-wasm.sh`). Rust builds use `panic=abort` for size today; a `panic=unwind` build (workers-rs 0.8+, nightly + `-Zbuild-std`) is an opt-in reliability mode — would let callers catch `PanicError` and fall back to the JS path instead of poisoning the isolate. Bench the size/latency delta before flipping the default.
 
-**Rejected**: Rust-first (slower to ship, risk of yak-shaving on Cargo config).
+**Rejected**: Rust-only (shipping a JS fallback keeps `@ken0106/core` usable in strictly-no-WASM environments and gives a safety net if the WASM panics).
 
 ---
 
 ## Open questions / TODO
 
-- Figure out actual npm scope at publish time (`@ken0106/*` likely taken — check before first publish).
-- Decide: include `PaletteError` class in core or keep errors as typed results?
 - Decide: should `getPalette` accept `ReadableStream` directly, or always buffer? Streaming decode has no jSquash support today.
-- Write the fixture generation script (50 test images with known expected palettes).
+- Write the fixture generation script (50 test images with known expected palettes). Today `test/fixtures/` has 10 JPEGs; no generator committed in `scripts/`.
+- Decide: implement `algorithm: 'mmcq'` for real, or narrow the `QuantizeAlgorithm` type back to `"wu"` only? (See ADR-002.)
+
+## Resolved (keep for history; do not reopen without ADR)
+
+- npm scope → `@ken0106` (the original `@paleta` is squatted; see "Published state" above).
+- `PaletteError` → shipped as an exported class from `@ken0106/core` (`packages/core/src/types.ts`).
